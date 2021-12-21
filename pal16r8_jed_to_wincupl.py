@@ -34,68 +34,73 @@
 # therefore a product term of all 0s means the output is always low.
 # but a product term of all 1s means the output is always true.
 
-f = open('U1_AMPAL16R8PC.jed', 'r')
-data = f.readlines()
-f.close()
+def main():
+    import argparse
 
-# crappy jedec parser
-allbits = []
-next_addr = 0
-for l in data:
-    l = l.strip()
-    if l[0] == 'L':
-        addr = int(l[1:6])
-        bits = l[7:-1]
-        allbits.append(bits)
-allbits = ''.join(allbits)
+    parser = argparse.ArgumentParser(description='')
+    parser.add_argument('jed_in')
+    args = parser.parse_args()
 
-# TODO: move these into a config/net name file
-inputnames = ['CYC0', 'CYC1', 'CYC2', 'CYC3',
-              'INT_S0#', 'INT_S1#', 'INT_S2#', 'HIGH_BYTE']
-
-#outputnames = []
-#for i in range(8):
-#    outputnames.append('O%d' % (i+1))
-
-# TODO: move these into a config/net name file
-outputnames = ['O1', 'O2', 'UNK5', 'O4', 'U58_LE', 'UNK2', 'UNK3', 'O8']
-
-# generate the english names for each input to the matrix
-termnames = []
-for i in range(8):
-    #termnames.append('I%d' % (i+2))
-    #termnames.append('!I%d' % (i+2))
-    termnames.append('%s' % (inputnames[i]))
-    termnames.append('!%s' % (inputnames[i]))
-    #termnames.append('O%d' % (i+1))
-    #termnames.append('!O%d' % (i+1))
-    termnames.append('%s' % (outputnames[i]))
-    termnames.append('!%s' % (outputnames[i]))
-
-# TODO: fix magic numbers
-# each output has 8 sum terms. (for the R. the L has an OE and 7 terms)
-for outp in range(8):
-    list_sums = []
-    terms = allbits[(256*outp):(256*(outp+1))]
-    for st in range(8):
-        list_prods = []
-        proterm = terms[(32*st):(32*(st+1))]
-        # process product term
-        # if it is 1111..., then it is fixed at a logic high
-        # this means the corresponding output is always high.
-        if not ('0' in proterm):
-            list_prods = [1]
-            list_sums.append('1')
-        # if it is 0000...., then it is fixed at a logic low
-        # this means we get to skip this sum term
-        elif not ('1' in proterm):
-            pass
-        else:
-            for pt in range(32):
-                if proterm[pt] == '0':
-                    list_prods.append(termnames[pt])
-            list_sums.append('(' + ' & '.join(list_prods) + ')')
-    #print(list_sums)
-    print(outputnames[outp] + ' = ' + ' | '.join(list_sums))
-    print('\n')
-
+    f = open(args.jed_in, 'r')
+    data = f.readlines()
+    f.close()
+    
+    # crappy jedec parser
+    allbits = []
+    for l in data:
+        l = l.strip()
+        if l[0] == 'L':
+            _addr = int(l[1:6])
+            bits = l[7:-1]
+            allbits.append(bits)
+    allbits = ''.join(allbits)
+    
+    # TODO: move these into a config/net name file
+    inputnames = ['CYC0', 'CYC1', 'CYC2', 'CYC3',
+                  'INT_S0#', 'INT_S1#', 'INT_S2#', 'HIGH_BYTE']
+    
+    #outputnames = []
+    #for i in range(8):
+    #    outputnames.append('O%d' % (i+1))
+    
+    # TODO: move these into a config/net name file
+    outputnames = ['O1', 'O2', 'UNK5', 'O4', 'U58_LE', 'UNK2', 'UNK3', 'O8']
+    
+    # generate the english names for each input to the matrix
+    termnames = []
+    for i in range(8):
+        #termnames.append('I%d' % (i+2))
+        #termnames.append('!I%d' % (i+2))
+        termnames.append('%s' % (inputnames[i]))
+        termnames.append('!%s' % (inputnames[i]))
+        #termnames.append('O%d' % (i+1))
+        #termnames.append('!O%d' % (i+1))
+        termnames.append('%s' % (outputnames[i]))
+        termnames.append('!%s' % (outputnames[i]))
+    
+    # TODO: fix magic numbers
+    # each output has 8 sum terms. (for the R. the L has an OE and 7 terms)
+    for outp in range(8):
+        list_sums = []
+        terms = allbits[(256*outp):(256*(outp+1))]
+        for st in range(8):
+            list_prods = []
+            proterm = terms[(32*st):(32*(st+1))]
+            # process product term
+            # if it is 1111..., then it is fixed at a logic high
+            # this means the corresponding output is always high.
+            if not ('0' in proterm):
+                list_prods = [1]
+                list_sums.append('1')
+            # if it is 0000...., then it is fixed at a logic low
+            # this means we get to skip this sum term
+            elif not ('1' in proterm):
+                pass
+            else:
+                for pt in range(32):
+                    if proterm[pt] == '0':
+                        list_prods.append(termnames[pt])
+                list_sums.append('(' + ' & '.join(list_prods) + ')')
+        #print(list_sums)
+        print(outputnames[outp] + ' = ' + ' | '.join(list_sums))
+        print('\n')

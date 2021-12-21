@@ -89,6 +89,84 @@ bit_row2index = {
     30: 14,
     31: 18,
     }
+
+bit_row2index = {
+    0: 0,
+    1: 15,
+    2: 9,
+    3: 1,
+    4: 3,
+    5: 23,
+    6: 17,
+    7: 19,
+    8: 13,
+    9: 10,
+    10: 25,
+    11: 11,
+    12: 12,
+    13: 8,
+    14: 14,
+    15: 16,
+    16: 31,
+    17: 6,
+    18: 27,
+    19: 7,
+    20: 20,
+    21: 21,
+    22: 22,
+    23: 5,
+    24: 30,
+    25: 2,
+    26: 26,
+    27: 18,
+    28: 28,
+    29: 29,
+    30: 24,
+    31: 4,
+    }
+
+
+
+'''
+bit_row2index = {
+0: 0,
+1: 1,
+2: 2,
+3: 3,
+4: 4,
+5: 5,
+6: 6,
+7: 7,
+8: 8,
+9: 9,
+10: 10,
+11: 11,
+12: 12,
+13: 13,
+14: 14,
+15: 15,
+16: 16,
+17: 17,
+18: 18,
+19: 19,
+20: 20,
+21: 21,
+22: 22,
+23: 23,
+24: 24,
+25: 25,
+26: 26,
+27: 27,
+28: 28,
+29: 29,
+30: 30,
+31: 31,
+    }
+'''
+
+
+
+
 bit_index2row = {}
 for k, v in bit_row2index.items():
     bit_index2row[v] = k
@@ -213,8 +291,7 @@ def run(txt_in, jed_out, invert=True):
     txtin, win, hin = mrom.load_txt(open(txt_in, "r"), None, None)
     assert (win, hin) == (64, 32), (win, hin)
     
-    if invert:
-        txtin, win, hin = munge_txt(txtin, win, hin)
+    txtin, win, hin = munge_txt(txtin, win, hin, invert=invert)
 
     words = [list("0" * 32) for _x in range(64)]
     for wordi in range(64):

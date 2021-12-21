@@ -7,3 +7,14 @@ Goals:
   * Post process microprobing data
 
 See also: https://proghq.org/wiki/index.php/PAL_Brute_Forcing
+
+
+## .jed vs dupal simulation
+
+./pal16r8_sim_jed.sh my.jed
+
+## Die image to .jed
+
+Use rompar or other tool to get .txt file
+
+txt2jed to get .jed file

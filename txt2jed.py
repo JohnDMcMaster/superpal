@@ -13,7 +13,7 @@ Die oriented with text right side up
 """
 
 
-from main import make_jed
+from superpal.jedutil import make_jed_from_words
 from zorrom import mrom
 from zorrom.util import add_bool_arg, parser_grcs, parse_grcs
 
@@ -222,7 +222,7 @@ def run(txt_in, jed_out, invert=True):
             col = word_log2phys[wordi]
             row = bit_index2row[biti]
             words[wordi][biti] = txtin[(col, row)]
-    jed = make_jed(words)
+    jed = make_jed_from_words(words)
     open(jed_out, "w").write(jed)
 
 if __name__ == "__main__":

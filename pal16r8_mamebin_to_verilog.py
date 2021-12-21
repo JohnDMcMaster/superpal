@@ -9,7 +9,7 @@ def main():
     parser.add_argument('bin_in')
     args = parser.parse_args()
 
-    b = open(args.jed_in, 'rb').read()
+    b = open(args.bin_in, 'rb').read()
     
     print('module pal16r8(clk, i, o);')
     print('\tinput  clk;')

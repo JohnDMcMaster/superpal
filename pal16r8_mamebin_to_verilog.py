@@ -11,10 +11,11 @@ def main():
 
     b = open(args.bin_in, 'rb').read()
     
-    print('module pal16r8(clk, i, o);')
-    print('\tinput  clk;')
-    print('\tinput  [7:0] i; // pin  2 = i[0], pin  9 = i[7]')
-    print('\toutput [7:0] o; // pin 19 = o[0], pin 12 = o[7]')
+    print('`default_nettype none')
+    print('module pal16r8(')
+    print('\t\tinput wire clk,')
+    print('\t\tinput wire [7:0] i, // pin  2 = i[0], pin  9 = i[7]')
+    print('\t\toutput reg [7:0] o); // pin 19 = o[0], pin 12 = o[7]')
     print('\talways @(posedge clk) begin')
     for line in range(8):
         base = 32 * (7 - line)

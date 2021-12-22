@@ -12,6 +12,10 @@ from collections import OrderedDict
 
 # this info can be parsed from jedutil output
 
+PINS_DUT = None
+PINS_DUT_IN = None
+PINS_DUT_OUT = None
+
 def pin_n2verilog(pin):
     """pin number to verilog name"""
     pinmap = {}
@@ -37,23 +41,27 @@ def gen_top(f):
     1024 entries
     100 ns per entry
     """
+    # sim_time = 102500
+    sim_step = 100
+    sim_time = ((1 << PINS_DUT_IN) + 1) * sim_step
+
 
     line("module pal16l8_sim();")
     line("""
   initial begin
-     # 102500 $finish;
+     # %u $finish;
   end
 
   reg [%u:0] pali = %u'b0;
   wire [%u:0] palo;
-  always #100 begin
+  always #%u begin
     pali = pali + %u'b1;
   end
 
   pal16l8 dut(
     .i(pali),
     .o(palo));
-""" % (PINS_DUT_IN - 1, PINS_DUT_IN, PINS_DUT_OUT - 1, PINS_DUT_OUT))
+""" % (sim_time, PINS_DUT_IN - 1, PINS_DUT_IN, PINS_DUT_OUT - 1, sim_step, PINS_DUT_OUT))
 
     line("""
   initial
@@ -91,10 +99,6 @@ def write(terms, fn_out):
     line('')
     gen_top(f)
 
-PINS_DUT = None
-PINS_DUT_IN = None
-PINS_DUT_OUT = None
-
 
 """
 Abandoned
@@ -105,7 +109,7 @@ Need to scrape the actual logic
 Anything not an output is an input?
 this also covers outputs being used as equation inputs
 """
-def gen_pindefs_bad(lines):
+def gen_pindefs(outputs):
     global PINS_DUT
     global PINS_DUT_IN
     global PINS_DUT_OUT
@@ -136,48 +140,17 @@ def gen_pindefs_bad(lines):
     """
     PINS_DUT = OrderedDict([])
 
-    def pop_line():
-        ret = lines[0]
-        del lines[0]
-        return ret
-
-    while True:
-        line = pop_line()
-        if "Inputs" in line:
-            break
-    pop_line()
-    inputs = pop_line()
-    inputs = [int(x) for x in inputs.split(",")]
-    pop_line()
-    assert "Outputs:" in pop_line()
-    pop_line()
-
-    outputs = []
-    while True:
-        line = pop_line()
-        if not line:
-            break
-        outputs.append(int(line.split(" ")[0]))
-
-    while True:
-        line = lines[0]
-        del lines[0]
-        if "Equations" in line:
-            break
-
     # Now order pins
     for pinn in range(1, 20):
         if pinn == PIN_GND:
             continue
 
         # Input pins 
-        if pinn in inputs:
-            PINS_DUT[pinn] = "i"
-        elif pinn in outputs:
+        if pinn in outputs:
             PINS_DUT[pinn] = "o"
         else:
-            assert 0, pinn
-    
+            PINS_DUT[pinn] = "i"
+
     PINS_DUT_IN = sum([1 if x == "i" else 0 for x in PINS_DUT.values()])
     PINS_DUT_OUT = sum([1 if x == "o" else 0 for x in PINS_DUT.values()])
     print("Calculated pins: %u input, %u output" % (PINS_DUT_IN, PINS_DUT_OUT))
@@ -185,6 +158,15 @@ def gen_pindefs_bad(lines):
     assert PINS_DUT_OUT
 
 def parse_terms(jedutil_out):
+    def pop_line():
+        ret = lines[0]
+        del lines[0]
+        return ret
+
+    def wait_line(s):
+        while s not in pop_line():
+            pass
+
     def check_term(x):
         inverted = ''
         if x[0] == '~':
@@ -199,19 +181,37 @@ def parse_terms(jedutil_out):
 
     jedutil_out = jedutil_out.replace("\r\n", "\n")
     for _i in range(40):
+        jedutil_out = jedutil_out.replace("\t", " ")
         jedutil_out = jedutil_out.replace("  ", " ")
     jedutil_out = jedutil_out.replace("+\n", "+ ")
+    jedutil_out = jedutil_out.replace("  ", " ")
     terms = {}
 
-    lines = jedutil_out.split("\n")
-    gen_pindefs(lines)
-    print('looping')
+    lines_orig = jedutil_out.split("\n")
+
+    # pass 1: parse pin definitions
+    # collect outputs and assume the rest are inputs
+    print('looping for pin defs')
+    lines = list(lines_orig)
+    outputs = []
     for l in lines:
         l = l.strip()
         m = re.match("/(o.*) = (.*)", l)
         if not m:
-            print('skip: ', l)
             continue
+        pinn = int(m.group(1)[1:])
+        outputs.append(pinn)
+    gen_pindefs(outputs)
+
+    # gen_pindefs(lines)
+    print('looping for logic defs')
+    lines = list(lines_orig)
+    for l in lines:
+        l = l.strip()
+        m = re.match("/(o.*) = (.*)", l)
+        if not m:
+            continue
+        # print('checking: ', l)
         output = pin_n2verilog(int(m.group(1)[1:]))
         rhs = m.group(2)
         rhs = rhs.replace("/", "~")

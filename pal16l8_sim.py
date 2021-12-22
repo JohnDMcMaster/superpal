@@ -35,7 +35,7 @@ def parse_sim(fn):
     return ret
 
 
-def parse_tl866_raw(fn):
+def parse_pal866_raw(fn):
     """
     {"part": "PAL16L8", "pins": {"A": [1, 2, 3, 4, 5, 6, 7, 8, 9, 11], "CLK": null, "D": [12, 13, 14, 15, 16, 17, 18, 19], "GND": 10, "OEn": null, "VCC": 20}, "data_words": 1024}
     [0, 128, null]
@@ -50,8 +50,8 @@ def parse_tl866_raw(fn):
     return header, lines
 
 
-def parse_tl866_simple(fn):
-    header, lines = parse_tl866_raw(fn)
+def parse_pal866_simple(fn):
+    header, lines = parse_pal866_raw(fn)
     assert header["part"] == "PAL16L8"
     ret = {}
     for (input, output, _transition) in lines:
@@ -60,19 +60,16 @@ def parse_tl866_simple(fn):
 
 
 def run_verify_pal866(pal866_fn, sim_fn):
-    expectn = 1024
-
     sim = parse_sim(sim_fn)
-    tl866 = parse_tl866_simple(pal866_fn)
-    assert expectn == len(sim), ("Expected %u entries, got %u" % (expectn, len(sim)))
-    assert expectn == len(tl866), ("Expected %u entries, got %u" % (expectn, len(tl866)))
+    pal866 = parse_pal866_simple(pal866_fn)
+    assert len(sim) == len(pal866), ("%u sim entries but %u pal866 entries" % (len(sim), len(pal866)))
     ok = 0
     nok = 0
-    for addr in range(expectn):
-        if sim[addr] == tl866[addr]:
+    for addr in range(len(sim)):
+        if sim[addr] == pal866[addr]:
             ok += 1
         else:
-            print("0x%04X: sim 0x%04X cap 0x%04X" % (sim[addr], tl866[addr]))
+            print("0x%04X: sim 0x%04X cap 0x%04X" % (sim[addr], pal866[addr]))
             nok += 1
     print("Summary")
     print("  ok: 0x%04X" % ok)

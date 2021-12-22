@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 """
 PAL16R8A2NC
 As photographed each word is a column
@@ -12,11 +11,9 @@ Then images were manually ordered
 Die oriented with text right side up
 """
 
-
 from superpal.jedutil import make_jed_from_words
 from zorrom import mrom
 from zorrom.util import add_bool_arg, parser_grcs, parse_grcs
-
 """
 Visually ordered to be in physical order
 a00_30w_01b.jpg
@@ -88,7 +85,7 @@ bit_row2index = {
     29: 19,
     30: 14,
     31: 18,
-    }
+}
 
 bit_row2index = {
     0: 0,
@@ -123,10 +120,7 @@ bit_row2index = {
     29: 29,
     30: 24,
     31: 4,
-    }
-
-
-
+}
 '''
 bit_row2index = {
 0: 0,
@@ -163,9 +157,6 @@ bit_row2index = {
 31: 31,
     }
 '''
-
-
-
 
 bit_index2row = {}
 for k, v in bit_row2index.items():
@@ -250,7 +241,7 @@ word_col2log = [
     5,
     6,
     7,
-    ]
+]
 assert len(word_col2log) == 64
 word_col2log = dict(enumerate(word_col2log))
 
@@ -258,6 +249,7 @@ word_log2phys = {}
 for k, v in word_col2log.items():
     word_log2phys[v] = k
 assert len(word_log2phys) == 64
+
 
 def munge_txt(txt,
               win,
@@ -283,14 +275,17 @@ def munge_txt(txt,
         txtdict = mrom.td_invert(txtdict, wout, hout)
     return txtdict, wout, hout
 
+
 """
 Unufsed (bright) areas are 0 on bin
 However bright areas are usually classified as 1
 """
+
+
 def run(txt_in, jed_out, invert=True):
     txtin, win, hin = mrom.load_txt(open(txt_in, "r"), None, None)
     assert (win, hin) == (64, 32), (win, hin)
-    
+
     txtin, win, hin = munge_txt(txtin, win, hin, invert=invert)
 
     words = [list("0" * 32) for _x in range(64)]
@@ -301,6 +296,7 @@ def run(txt_in, jed_out, invert=True):
             words[wordi][biti] = txtin[(col, row)]
     jed = make_jed_from_words(words)
     open(jed_out, "w").write(jed)
+
 
 if __name__ == "__main__":
     import argparse

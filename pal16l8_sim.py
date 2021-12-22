@@ -7,7 +7,6 @@ import shutil
 import os
 import subprocess
 import json
-
 """
 TODO:
 -verilog sim needs to run entire sim length
@@ -15,6 +14,7 @@ TODO:
 -readpal_verify
     where is the captured data?
 """
+
 
 def parse_sim(fn):
     """
@@ -62,7 +62,8 @@ def parse_pal866_simple(fn):
 
 
 def check_sim_vs_electrical(sim, electrical, pin_metadata):
-    assert len(sim) == len(electrical), ("%u sim entries but %u tocheck entries" % (len(sim), len(electrical)))
+    assert len(sim) == len(electrical), (
+        "%u sim entries but %u tocheck entries" % (len(sim), len(electrical)))
 
     # Loopback makes read out unstable
     # Verify as much as possible though
@@ -81,7 +82,8 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata):
         if (sim[addr] & data_mask) == (electrical[addr] & data_mask):
             ok += 1
         else:
-            print("0x%04X: sim 0x%04X cap 0x%04X" % (addr, sim[addr], electrical[addr]))
+            print("0x%04X: sim 0x%04X cap 0x%04X" %
+                  (addr, sim[addr], electrical[addr]))
             nok += 1
 
     print("Summary")
@@ -90,6 +92,7 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata):
     print("  looped pins: %u" % looped_pins)
     print("  data_mask: 0x%04X" % data_mask)
     assert nok == 0
+
 
 def run_verify_pal866(pal866_fn, sim_fn, pin_metadata):
     sim = parse_sim(sim_fn)
@@ -111,6 +114,7 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata):
         electrical.append(eprom[addr])
     check_sim_vs_electrical(sim, electrical, pin_metadata)
 
+
 def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
     tmp_dir = "vtmp"
     shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -118,20 +122,28 @@ def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
     shutil.copy(jed_fn_in, tmp_dir + "/pal16l8.jed")
     root_dir = os.path.dirname(os.path.abspath(__file__))
 
-    cd = "cd %s &&" % (tmp_dir,)
+    cd = "cd %s &&" % (tmp_dir, )
 
     print("Converting to view")
-    subprocess.check_output(cd + "jedutil -view pal16l8.jed PAL16L8 >pal16l8.view", shell=True, encoding="ascii")
+    subprocess.check_output(cd +
+                            "jedutil -view pal16l8.jed PAL16L8 >pal16l8.view",
+                            shell=True,
+                            encoding="ascii")
 
     print("Converting to verilog")
     # subprocess.check_output(cd + root_dir + "/pal16l8_jed_to_verilog.py pal16l8.jed pal16l8_sim.v", shell=True, encoding="ascii")
-    pin_metadata = pal16l8_jed_to_verilog.run(tmp_dir + "/pal16l8.jed", tmp_dir + "/pal16l8_sim.v")
+    pin_metadata = pal16l8_jed_to_verilog.run(tmp_dir + "/pal16l8.jed",
+                                              tmp_dir + "/pal16l8_sim.v")
 
     print("Compiling sim")
-    subprocess.check_output(cd + "iverilog -o pal16l8_sim.iv pal16l8_sim.v", shell=True, encoding="ascii")
+    subprocess.check_output(cd + "iverilog -o pal16l8_sim.iv pal16l8_sim.v",
+                            shell=True,
+                            encoding="ascii")
 
     print("Running sim")
-    sim_out = subprocess.check_output(cd + "vvp pal16l8_sim.iv", shell=True, encoding="ascii")
+    sim_out = subprocess.check_output(cd + "vvp pal16l8_sim.iv",
+                                      shell=True,
+                                      encoding="ascii")
     sim_log_fn = tmp_dir + "/pal16l8_sim.txt"
     open(sim_log_fn, "w").write(sim_out)
 
@@ -143,17 +155,24 @@ def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
 
     print("Done")
 
+
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='')
     add_bool_arg(parser, "--verbose")
-    parser.add_argument('--verify-readpal', help="Verify using readpal type EPROM capture")
-    parser.add_argument('--verify-pal866', help="Verify using pal866 type capture")
+    parser.add_argument('--verify-readpal',
+                        help="Verify using readpal type EPROM capture")
+    parser.add_argument('--verify-pal866',
+                        help="Verify using pal866 type capture")
     parser.add_argument('jed_in')
     args = parser.parse_args()
 
-    run(args.jed_in, verify_readpal=args.verify_readpal, verify_pal866=args.verify_pal866, verbose=args.verbose)
+    run(args.jed_in,
+        verify_readpal=args.verify_readpal,
+        verify_pal866=args.verify_pal866,
+        verbose=args.verbose)
+
 
 if __name__ == "__main__":
     main()

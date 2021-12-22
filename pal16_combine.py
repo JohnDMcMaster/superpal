@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 """
 When microprobing security fuses half of the chip is dumped at once
 Both halves need to be combined into a single usable dump
@@ -14,6 +13,7 @@ This tool checks the copies for consistency and outputs a single unified .jed
 from superpal import jedutil
 import glob
 import copy
+
 
 def dedup_jeds(aglob):
     fns = sorted(glob.glob(aglob))
@@ -31,7 +31,7 @@ def dedup_jeds(aglob):
 def combine_jeds(lower, upper):
     ret = copy.deepcopy(lower)
     for addr in range(0, 2048, 32):
-        if addr < 2048//2:
+        if addr < 2048 // 2:
             ret['data'][addr] = lower['data'][addr]
         else:
             ret['data'][addr] = upper['data'][addr]
@@ -53,6 +53,7 @@ def run(jed_dir, fn_out, part=None):
     if args.part:
         jed["part"] = part
     jedutil.save_jed(jed, fn_out)
+
 
 if __name__ == "__main__":
     import argparse

@@ -2,6 +2,7 @@
 
 # From OG
 
+
 def main():
     import argparse
 
@@ -10,7 +11,7 @@ def main():
     args = parser.parse_args()
 
     b = open(args.bin_in, 'rb').read()
-    
+
     print('`default_nettype none')
     print('module pal16r8(')
     print('\t\tinput wire clk,')
@@ -21,23 +22,23 @@ def main():
         base = 32 * (7 - line)
         s = ''
         for subline in range(8):
-            keys = b[base + 4*subline:base + 4*subline + 4]
+            keys = b[base + 4 * subline:base + 4 * subline + 4]
             if keys != b'\xff\xff\xff\xff':
                 t = ''
                 for i in range(8):
-                    if ((keys[i >> 1] >> (4*(i & 1))) & 1) == 0:
+                    if ((keys[i >> 1] >> (4 * (i & 1))) & 1) == 0:
                         if t != '':
                             t += ' & '
                         t += 'i[%d]' % i
-                    if ((keys[i >> 1] >> (4*(i & 1)) + 1) & 1) == 0:
+                    if ((keys[i >> 1] >> (4 * (i & 1)) + 1) & 1) == 0:
                         if t != '':
                             t += ' & '
                         t += '~i[%d]' % i
-                    if ((keys[i >> 1] >> (4*(i & 1)) + 2) & 1) == 0:
+                    if ((keys[i >> 1] >> (4 * (i & 1)) + 2) & 1) == 0:
                         if t != '':
                             t += ' & '
                         t += 'o[%d]' % i
-                    if ((keys[i >> 1] >> (4*(i & 1)) + 3) & 1) == 0:
+                    if ((keys[i >> 1] >> (4 * (i & 1)) + 3) & 1) == 0:
                         if t != '':
                             t += ' & '
                         t += '~o[%d]' % i
@@ -53,6 +54,7 @@ def main():
         print('\t\to[%d] <= %s;' % (line, s))
     print('\tend')
     print('endmodule')
+
 
 if __name__ == "__main__":
     main()

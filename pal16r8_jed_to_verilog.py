@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-
 """
 
 """
@@ -7,8 +6,10 @@
 import subprocess
 import re
 
+
 def write(terms, fn_out):
     f = open(fn_out, "w")
+
     def line(l):
         f.write(l + "\n")
 
@@ -22,6 +23,7 @@ def write(terms, fn_out):
         line('        o[%d] <= %s;' % (output, terms[output]))
     line('    end')
     line('endmodule')
+
 
 def parse_terms(jedutil_out):
     """
@@ -37,7 +39,6 @@ def parse_terms(jedutil_out):
     line('        output reg [7:0] o = 0); // pin 19 = o[0], pin 12 = o[7]')
 
     """
-    
     def rf2o(s):
         assert s[0:2] == "rf", s
         s = s[2:]
@@ -57,15 +58,19 @@ def parse_terms(jedutil_out):
         for i in range(8):
             rhs = rhs.replace("/", "~")
             rhs = rhs.replace("+", "|")
-            rhs = rhs.replace("rf%u" % (19 - i,), "o[%u]" % i)
+            rhs = rhs.replace("rf%u" % (19 - i, ), "o[%u]" % i)
             rhs = rhs.replace("i%u" % (i + 2), "i[%u]" % i)
         terms[output] = rhs
     return terms
 
+
 def run(jed_fn_in, v_fn_out):
-    raw = subprocess.check_output("jedutil -view %s PAL16R8" % jed_fn_in, shell=True, encoding="ascii")
+    raw = subprocess.check_output("jedutil -view %s PAL16R8" % jed_fn_in,
+                                  shell=True,
+                                  encoding="ascii")
     terms = parse_terms(raw)
     write(terms, v_fn_out)
+
 
 def main():
     import argparse
@@ -76,6 +81,7 @@ def main():
     args = parser.parse_args()
 
     run(args.jed_in, args.v_out)
+
 
 if __name__ == "__main__":
     main()

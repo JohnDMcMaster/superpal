@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-
 """
 At first I started with a more generic module
 Moving instead to generate the module + test harness together
@@ -17,6 +16,7 @@ PINS_DUT = None
 PINS_DUT_IN = None
 PINS_DUT_OUT = None
 
+
 def mk_pinmap():
     pinmap = {}
     inputs = 0
@@ -32,14 +32,17 @@ def mk_pinmap():
             assert 0
     return pinmap
 
+
 def pin_n2verilog(pin):
     """pin number to verilog name"""
     net, index = mk_pinmap()[pin]
     return "%s[%u]" % (net, index)
 
+
 def pin_n2vio(pin):
     """pin number to verilog io number"""
     return mk_pinmap()[pin]
+
 
 def gen_top(f):
     def line(l):
@@ -52,7 +55,6 @@ def gen_top(f):
     # sim_time = 102500
     sim_step = 100
     sim_time = ((1 << PINS_DUT_IN) + 1) * sim_step
-
 
     line("module pal16l8_sim();")
     line("""
@@ -69,7 +71,8 @@ def gen_top(f):
   pal16l8 dut(
     .i(pali),
     .o(palo));
-""" % (sim_time, PINS_DUT_IN - 1, PINS_DUT_IN, PINS_DUT_OUT - 1, sim_step, PINS_DUT_OUT))
+""" % (sim_time, PINS_DUT_IN - 1, PINS_DUT_IN, PINS_DUT_OUT - 1, sim_step,
+       PINS_DUT_OUT))
 
     line("""
   initial
@@ -78,13 +81,14 @@ def gen_top(f):
 endmodule
 """)
 
+
 def gen_pal(f, terms):
     def line(l):
         f.write(l + "\n")
 
     line('module pal16l8(')
-    line('        input wire [%u:0] i,' % (PINS_DUT_IN - 1,))
-    line('        output wire [%u:0] o' % (PINS_DUT_OUT - 1,))
+    line('        input wire [%u:0] i,' % (PINS_DUT_IN - 1, ))
+    line('        output wire [%u:0] o' % (PINS_DUT_OUT - 1, ))
     line('    );')
 
     for pinn, func in PINS_DUT.items():
@@ -93,6 +97,7 @@ def gen_pal(f, terms):
             line('    assign %s = %s;' % (vname, terms[vname]))
 
     line('endmodule')
+
 
 def write(terms, fn_out):
     f = open(fn_out, "w")
@@ -117,12 +122,13 @@ Need to scrape the actual logic
 Anything not an output is an input?
 this also covers outputs being used as equation inputs
 """
+
+
 def gen_pindefs(outputs):
     global PINS_DUT
     global PINS_DUT_IN
     global PINS_DUT_OUT
     PIN_GND = 10
-
     """
     # Device speciifc. TODO: auto generate
     PINS_DUT = OrderedDict([
@@ -153,7 +159,7 @@ def gen_pindefs(outputs):
         if pinn == PIN_GND:
             continue
 
-        # Input pins 
+        # Input pins
         if pinn in outputs:
             PINS_DUT[pinn] = "o"
         else:
@@ -164,6 +170,7 @@ def gen_pindefs(outputs):
     print("Calculated pins: %u input, %u output" % (PINS_DUT_IN, PINS_DUT_OUT))
     assert PINS_DUT_IN
     assert PINS_DUT_OUT
+
 
 def parse_terms(jedutil_out):
     def pop_line():
@@ -199,7 +206,7 @@ def parse_terms(jedutil_out):
         "pins_dut": PINS_DUT,
         "pins_dut_in": PINS_DUT_IN,
         "pins_dut_out": PINS_DUT_OUT,
-        }
+    }
 
     lines_orig = jedutil_out.split("\n")
 
@@ -241,6 +248,7 @@ def parse_terms(jedutil_out):
                 return pinn == l_pinn
             else:
                 return False
+
         is_looped = bool(sum([is_term_looped(x) for x in rhs.split(' ')]))
         metadata['looped'][l_pinn] = is_looped
 
@@ -251,20 +259,27 @@ def parse_terms(jedutil_out):
                 return inverted + pin_n2verilog(pinn)
             else:
                 return x
-    
-        rhs = ' '.join([munge_term(x) for x in rhs.split(' ')])
 
+        rhs = ' '.join([munge_term(x) for x in rhs.split(' ')])
 
         terms[output] = '~(%s)' % rhs
     return terms, metadata
 
+
 def run(jed_fn_in, v_fn_out, metadata_fn=None):
-    raw = subprocess.check_output("jedutil -view %s PAL16L8" % jed_fn_in, shell=True, encoding="ascii")
+    raw = subprocess.check_output("jedutil -view %s PAL16L8" % jed_fn_in,
+                                  shell=True,
+                                  encoding="ascii")
     terms, metadata = parse_terms(raw)
     write(terms, v_fn_out)
     if metadata_fn:
-        open(metadata_fn, "w").write(json.dumps(metadata, sort_keys=True, indent=4, separators=(',', ': ')))
+        open(metadata_fn, "w").write(
+            json.dumps(metadata,
+                       sort_keys=True,
+                       indent=4,
+                       separators=(',', ': ')))
     return metadata
+
 
 def main():
     import argparse
@@ -276,6 +291,7 @@ def main():
     args = parser.parse_args()
 
     run(args.jed_in, args.v_out, metadata_fn=args.metadata)
+
 
 if __name__ == "__main__":
     main()

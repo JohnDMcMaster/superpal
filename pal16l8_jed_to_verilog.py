@@ -9,6 +9,7 @@ This removes tristates entirely as we just know whether something is an input or
 import subprocess
 import re
 from collections import OrderedDict
+import json
 
 # this info can be parsed from jedutil output
 
@@ -16,22 +17,29 @@ PINS_DUT = None
 PINS_DUT_IN = None
 PINS_DUT_OUT = None
 
-def pin_n2verilog(pin):
-    """pin number to verilog name"""
+def mk_pinmap():
     pinmap = {}
     inputs = 0
     outputs = 0
     for k, v in PINS_DUT.items():
         if v == "i":
-            pinmap[k] = "i[%u]" % inputs
+            pinmap[k] = ("i", inputs)
             inputs += 1
         elif v == "o":
-            pinmap[k] = "o[%u]" % outputs
+            pinmap[k] = ("o", outputs)
             outputs += 1
         else:
             assert 0
+    return pinmap
 
-    return pinmap[pin]
+def pin_n2verilog(pin):
+    """pin number to verilog name"""
+    net, index = mk_pinmap()[pin]
+    return "%s[%u]" % (net, index)
+
+def pin_n2vio(pin):
+    """pin number to verilog io number"""
+    return mk_pinmap()[pin]
 
 def gen_top(f):
     def line(l):
@@ -167,17 +175,16 @@ def parse_terms(jedutil_out):
         while s not in pop_line():
             pass
 
-    def check_term(x):
+    def parse_term(x):
         inverted = ''
         if x[0] == '~':
             inverted = '~'
             x = x[1:]
-        if x[0] == 'o':
-            return inverted + pin_n2verilog(int(x[1:]))
-        elif x[0] == 'i':
-            return inverted + pin_n2verilog(int(x[1:]))
+        if x[0] == 'i' or x[0] == 'o':
+            pinn = int(x[1:])
+            return pinn, inverted
         else:
-            return x
+            return None
 
     jedutil_out = jedutil_out.replace("\r\n", "\n")
     for _i in range(40):
@@ -186,6 +193,13 @@ def parse_terms(jedutil_out):
     jedutil_out = jedutil_out.replace("+\n", "+ ")
     jedutil_out = jedutil_out.replace("  ", " ")
     terms = {}
+    # By package pin number
+    metadata = {
+        'looped': {},
+        "pins_dut": PINS_DUT,
+        "pins_dut_in": PINS_DUT_IN,
+        "pins_dut_out": PINS_DUT_OUT,
+        }
 
     lines_orig = jedutil_out.split("\n")
 
@@ -212,29 +226,56 @@ def parse_terms(jedutil_out):
         if not m:
             continue
         # print('checking: ', l)
-        output = pin_n2verilog(int(m.group(1)[1:]))
+        l_pinn = int(m.group(1)[1:])
+        output = pin_n2verilog(l_pinn)
         rhs = m.group(2)
+
         rhs = rhs.replace("/", "~")
         rhs = rhs.replace("+", "|")
-        # FIXME: this can probably be simplified now that I'm conforming to their names
-        rhs = ' '.join([check_term(x) for x in rhs.split(' ')])
-        terms[output] = '~(%s)' % rhs
-    return terms
 
-def run(jed_fn_in, v_fn_out):
+        def is_term_looped(x):
+            res = parse_term(x)
+            if res:
+                pinn, _inverted = res
+                # Looped if its equation contains itself
+                return pinn == l_pinn
+            else:
+                return False
+        is_looped = bool(sum([is_term_looped(x) for x in rhs.split(' ')]))
+        metadata['looped'][l_pinn] = is_looped
+
+        def munge_term(x):
+            res = parse_term(x)
+            if res:
+                pinn, inverted = res
+                return inverted + pin_n2verilog(pinn)
+            else:
+                return x
+    
+        rhs = ' '.join([munge_term(x) for x in rhs.split(' ')])
+
+
+        terms[output] = '~(%s)' % rhs
+    return terms, metadata
+
+def run(jed_fn_in, v_fn_out, metadata_fn=None):
     raw = subprocess.check_output("jedutil -view %s PAL16L8" % jed_fn_in, shell=True, encoding="ascii")
-    terms = parse_terms(raw)
+    terms, metadata = parse_terms(raw)
     write(terms, v_fn_out)
+    if metadata_fn:
+        open(metadata_fn, "w").write(json.dumps(metadata, sort_keys=True, indent=4, separators=(',', ': ')))
+    return metadata
 
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='')
+    parser.add_argument('--metadata', help="Supplemental parsing data ")
     parser.add_argument('jed_in')
     parser.add_argument('v_out')
     args = parser.parse_args()
 
-    run(args.jed_in, args.v_out)
+    run(args.jed_in, args.v_out, metadata_fn=args.metadata)
 
 if __name__ == "__main__":
     main()

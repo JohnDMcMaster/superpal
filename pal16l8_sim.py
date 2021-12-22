@@ -61,28 +61,43 @@ def parse_pal866_simple(fn):
     return ret
 
 
-def check_sim_vs_electrical(sim, electrical):
+def check_sim_vs_electrical(sim, electrical, pin_metadata):
     assert len(sim) == len(electrical), ("%u sim entries but %u tocheck entries" % (len(sim), len(electrical)))
+
+    # Loopback makes read out unstable
+    # Verify as much as possible though
+    looped_pins = 0
+    data_mask = (1 << pal16l8_jed_to_verilog.PINS_DUT_OUT) - 1
+    for pinn, looped in pin_metadata['looped'].items():
+        if looped:
+            net, index = pal16l8_jed_to_verilog.pin_n2vio(pinn)
+            assert net == "o"
+            data_mask ^= 1 << index
+            looped_pins += 1
+
     ok = 0
     nok = 0
     for addr in range(len(sim)):
-        if sim[addr] == electrical[addr]:
+        if (sim[addr] & data_mask) == (electrical[addr] & data_mask):
             ok += 1
         else:
             print("0x%04X: sim 0x%04X cap 0x%04X" % (addr, sim[addr], electrical[addr]))
             nok += 1
+
     print("Summary")
     print("  ok: 0x%04X" % ok)
     print("  nok: 0x%04X" % nok)
+    print("  looped pins: %u" % looped_pins)
+    print("  data_mask: 0x%04X" % data_mask)
     assert nok == 0
 
-def run_verify_pal866(pal866_fn, sim_fn):
+def run_verify_pal866(pal866_fn, sim_fn, pin_metadata):
     sim = parse_sim(sim_fn)
     pal866 = parse_pal866_simple(pal866_fn)
-    check_sim_vs_electrical(sim, pal866)
+    check_sim_vs_electrical(sim, pal866, pin_metadata)
 
 
-def run_verify_readpal(readpal_fn, sim_fn):
+def run_verify_readpal(readpal_fn, sim_fn, pin_metadata):
     """
     http://techno-junk.org/readpal.php
     http://dreamjam.co.uk/emuviews/files/adapter-v2-cap.png
@@ -94,7 +109,7 @@ def run_verify_readpal(readpal_fn, sim_fn):
     electrical = []
     for addr in range(1 << pal16l8_jed_to_verilog.PINS_DUT_IN):
         electrical.append(eprom[addr])
-    check_sim_vs_electrical(sim, electrical)
+    check_sim_vs_electrical(sim, electrical, pin_metadata)
 
 def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
     tmp_dir = "vtmp"
@@ -110,7 +125,7 @@ def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
 
     print("Converting to verilog")
     # subprocess.check_output(cd + root_dir + "/pal16l8_jed_to_verilog.py pal16l8.jed pal16l8_sim.v", shell=True, encoding="ascii")
-    pal16l8_jed_to_verilog.run(tmp_dir + "/pal16l8.jed", tmp_dir + "/pal16l8_sim.v")
+    pin_metadata = pal16l8_jed_to_verilog.run(tmp_dir + "/pal16l8.jed", tmp_dir + "/pal16l8_sim.v")
 
     print("Compiling sim")
     subprocess.check_output(cd + "iverilog -o pal16l8_sim.iv pal16l8_sim.v", shell=True, encoding="ascii")
@@ -121,10 +136,10 @@ def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
     open(sim_log_fn, "w").write(sim_out)
 
     if verify_pal866:
-        run_verify_pal866(verify_pal866, sim_log_fn)
+        run_verify_pal866(verify_pal866, sim_log_fn, pin_metadata)
 
     if verify_readpal:
-        run_verify_readpal(verify_readpal, sim_log_fn)
+        run_verify_readpal(verify_readpal, sim_log_fn, pin_metadata)
 
     print("Done")
 

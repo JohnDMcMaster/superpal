@@ -12,31 +12,6 @@ from collections import OrderedDict
 
 # this info can be parsed from jedutil output
 
-# Device speciifc. TODO: auto generate
-PINS_DUT = OrderedDict([
-    (1, "i"),
-    (2, "i"),
-    (3, "i"),
-    (4, "i"),
-    (5, "i"),
-    (6, "i"),
-    (7, "i"),
-    (8, "i"),
-    (9, "i"),
-    (11, "i"),
-    (12, "o"),
-    (13, "o"),
-    (14, "o"),
-    (15, "o"),
-    (16, "o"),
-    (17, "o"),
-    (18, "o"),
-    (19, "o"),
-    ])
-PINS_DUT_IN = sum([1 if x == "i" else 0 for x in PINS_DUT.values()])
-PINS_DUT_OUT = sum([1 if x == "o" else 0 for x in PINS_DUT.values()])
-
-
 def pin_n2verilog(pin):
     """pin number to verilog name"""
     pinmap = {}
@@ -116,6 +91,99 @@ def write(terms, fn_out):
     line('')
     gen_top(f)
 
+PINS_DUT = None
+PINS_DUT_IN = None
+PINS_DUT_OUT = None
+
+
+"""
+Abandoned
+The pin list at the top is just a list of potential options
+it doesn't show the actual configuration
+Need to scrape the actual logic
+
+Anything not an output is an input?
+this also covers outputs being used as equation inputs
+"""
+def gen_pindefs_bad(lines):
+    global PINS_DUT
+    global PINS_DUT_IN
+    global PINS_DUT_OUT
+    PIN_GND = 10
+
+    """
+    # Device speciifc. TODO: auto generate
+    PINS_DUT = OrderedDict([
+        (1, "i"),
+        (2, "i"),
+        (3, "i"),
+        (4, "i"),
+        (5, "i"),
+        (6, "i"),
+        (7, "i"),
+        (8, "i"),
+        (9, "i"),
+        (11, "i"),
+        (12, "o"),
+        (13, "o"),
+        (14, "o"),
+        (15, "o"),
+        (16, "o"),
+        (17, "o"),
+        (18, "o"),
+        (19, "o"),
+        ])
+    """
+    PINS_DUT = OrderedDict([])
+
+    def pop_line():
+        ret = lines[0]
+        del lines[0]
+        return ret
+
+    while True:
+        line = pop_line()
+        if "Inputs" in line:
+            break
+    pop_line()
+    inputs = pop_line()
+    inputs = [int(x) for x in inputs.split(",")]
+    pop_line()
+    assert "Outputs:" in pop_line()
+    pop_line()
+
+    outputs = []
+    while True:
+        line = pop_line()
+        if not line:
+            break
+        outputs.append(int(line.split(" ")[0]))
+
+    while True:
+        line = lines[0]
+        del lines[0]
+        if "Equations" in line:
+            break
+
+    # Now order pins
+    for pinn in range(1, 20):
+        if pinn == PIN_GND:
+            continue
+
+        # Input pins 
+        if pinn in inputs:
+            PINS_DUT[pinn] = "i"
+        elif pinn in outputs:
+            PINS_DUT[pinn] = "o"
+        else:
+            assert 0, pinn
+    
+    PINS_DUT_IN = sum([1 if x == "i" else 0 for x in PINS_DUT.values()])
+    PINS_DUT_OUT = sum([1 if x == "o" else 0 for x in PINS_DUT.values()])
+    print("Calculated pins: %u input, %u output" % (PINS_DUT_IN, PINS_DUT_OUT))
+    assert PINS_DUT_IN
+    assert PINS_DUT_OUT
+
 def parse_terms(jedutil_out):
     def check_term(x):
         inverted = ''
@@ -130,17 +198,20 @@ def parse_terms(jedutil_out):
             return x
 
     jedutil_out = jedutil_out.replace("\r\n", "\n")
-    # FIXME: quick test
-    jedutil_out = jedutil_out.replace("+\n       ", "+ ")
+    for _i in range(40):
+        jedutil_out = jedutil_out.replace("  ", " ")
+    jedutil_out = jedutil_out.replace("+\n", "+ ")
     terms = {}
+
+    lines = jedutil_out.split("\n")
+    gen_pindefs(lines)
     print('looping')
-    for l in jedutil_out.split("\n"):
+    for l in lines:
         l = l.strip()
         m = re.match("/(o.*) = (.*)", l)
         if not m:
             print('skip: ', l)
             continue
-        print(l)
         output = pin_n2verilog(int(m.group(1)[1:]))
         rhs = m.group(2)
         rhs = rhs.replace("/", "~")

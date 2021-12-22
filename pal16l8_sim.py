@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
 from superpal.util import add_bool_arg
+import pal16l8_jed_to_verilog
+
 import shutil
 import os
 import subprocess
@@ -59,23 +61,40 @@ def parse_pal866_simple(fn):
     return ret
 
 
-def run_verify_pal866(pal866_fn, sim_fn):
-    sim = parse_sim(sim_fn)
-    pal866 = parse_pal866_simple(pal866_fn)
-    assert len(sim) == len(pal866), ("%u sim entries but %u pal866 entries" % (len(sim), len(pal866)))
+def check_sim_vs_electrical(sim, electrical):
+    assert len(sim) == len(electrical), ("%u sim entries but %u tocheck entries" % (len(sim), len(electrical)))
     ok = 0
     nok = 0
     for addr in range(len(sim)):
-        if sim[addr] == pal866[addr]:
+        if sim[addr] == electrical[addr]:
             ok += 1
         else:
-            print("0x%04X: sim 0x%04X cap 0x%04X" % (sim[addr], pal866[addr]))
+            print("0x%04X: sim 0x%04X cap 0x%04X" % (addr, sim[addr], electrical[addr]))
             nok += 1
     print("Summary")
     print("  ok: 0x%04X" % ok)
     print("  nok: 0x%04X" % nok)
     assert nok == 0
 
+def run_verify_pal866(pal866_fn, sim_fn):
+    sim = parse_sim(sim_fn)
+    pal866 = parse_pal866_simple(pal866_fn)
+    check_sim_vs_electrical(sim, pal866)
+
+
+def run_verify_readpal(readpal_fn, sim_fn):
+    """
+    http://techno-junk.org/readpal.php
+    http://dreamjam.co.uk/emuviews/files/adapter-v2-cap.png
+    Pin mapping appears to be what I'd call "intuitive"
+    """
+    assert pal16l8_jed_to_verilog.PINS_DUT_OUT == 8, "FIXME: only implemented trivial case"
+    sim = parse_sim(sim_fn)
+    eprom = open(readpal_fn, "rb").read()
+    electrical = []
+    for addr in range(1 << pal16l8_jed_to_verilog.PINS_DUT_IN):
+        electrical.append(eprom[addr])
+    check_sim_vs_electrical(sim, electrical)
 
 def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
     tmp_dir = "vtmp"
@@ -90,7 +109,8 @@ def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
     subprocess.check_output(cd + "jedutil -view pal16l8.jed PAL16L8 >pal16l8.view", shell=True, encoding="ascii")
 
     print("Converting to verilog")
-    subprocess.check_output(cd + root_dir + "/pal16l8_jed_to_verilog.py pal16l8.jed pal16l8_sim.v", shell=True, encoding="ascii")
+    # subprocess.check_output(cd + root_dir + "/pal16l8_jed_to_verilog.py pal16l8.jed pal16l8_sim.v", shell=True, encoding="ascii")
+    pal16l8_jed_to_verilog.run(tmp_dir + "/pal16l8.jed", tmp_dir + "/pal16l8_sim.v")
 
     print("Compiling sim")
     subprocess.check_output(cd + "iverilog -o pal16l8_sim.iv pal16l8_sim.v", shell=True, encoding="ascii")
@@ -102,6 +122,9 @@ def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
 
     if verify_pal866:
         run_verify_pal866(verify_pal866, sim_log_fn)
+
+    if verify_readpal:
+        run_verify_readpal(verify_readpal, sim_log_fn)
 
     print("Done")
 

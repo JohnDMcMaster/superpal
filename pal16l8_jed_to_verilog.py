@@ -58,10 +58,15 @@ def gen_top(f):
     def line(l):
         f.write(l + "\n")
 
+    """
+    1024 entries
+    100 ns per entry
+    """
+
     line("module pal16l8_sim();")
     line("""
   initial begin
-     # 30000 $finish;
+     # 102500 $finish;
   end
 
   reg [%u:0] pali = %u'b0;

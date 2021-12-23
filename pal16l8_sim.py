@@ -13,26 +13,32 @@ TODO:
 -pal866_verify
 -readpal_verify
     where is the captured data?
+
+LSB is output first for simplicity
 """
 
 
 def parse_sim(fn):
     """
-    At time                    0, i = 000 (0), o = 80 (128)
-    At time                  100, i = 001 (1), o = 88 (136)
-    At time                  200, i = 002 (2), o = 90 (144)
+    t=                   0, i=0000000000, o=1x101111
+    t=                 100, i=1000000000, o=1x101111
+    t=                 200, i=0100000000, o=1x101111
     """
     ret = {}
     for l in open(fn, "r"):
-        l = l.strip()
-        if "At time" not in l:
-            continue
-        l = l[len("At time                  100, "):]
-        # i = 002 (2), o = 90 (144)
-        parts = l.split()
-        input = int(parts[2], 16)
-        output = int(parts[6], 16)
-        ret[input] = output
+        try:
+            l = l.strip()
+            if "t=" not in l:
+                continue
+            # i = 002 (2), o = 90 (144)
+            parts = l.split(",")
+            input = int(parts[1].split("=")[1], 2)
+            # output = int(parts[0].split("=")[1], 2)
+            output = parts[2].split("=")[1]
+            ret[input] = output
+        except:
+            print("FAILED: ", l)
+            raise
     assert len(ret) > 0, "Failed to parse sim"
     return ret
 
@@ -78,19 +84,39 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata):
 
     ok = 0
     nok = 0
+    # MSB first
+    out_bits = len(sim[0])
+
+    def o_to_binstr(x):
+        return format(x, '0%ub' % out_bits)
+
+    print("Out bits: %u" % out_bits)
     for addr in range(len(sim)):
-        if (sim[addr] & data_mask) == (electrical[addr] & data_mask):
+        obits = o_to_binstr(electrical[addr])
+        for biti in range(out_bits):
+            # Skip this bit?
+            if not ((1 << biti) & data_mask):
+                continue
+            # MSB is first
+            bit_sim = sim[addr][out_bits - biti - 1]
+            if bit_sim == 'x':
+                continue
+            bit_sim = int(bit_sim)
+            bit_electrical = (electrical[addr] >> biti) & 1
+            if bit_sim != bit_electrical:
+                print(
+                    "0x%04X: sim 0b%s cap 0b%s mask 0b%s (bit %u: %s vs %s)" %
+                    (addr, sim[addr], obits, o_to_binstr(data_mask), biti,
+                     bit_sim, bit_electrical))
+                nok += 1
+                break
             ok += 1
-        else:
-            print("0x%04X: sim 0x%04X cap 0x%04X" %
-                  (addr, sim[addr], electrical[addr]))
-            nok += 1
 
     print("Summary")
     print("  ok: 0x%04X" % ok)
     print("  nok: 0x%04X" % nok)
     print("  looped pins: %u" % looped_pins)
-    print("  data_mask: 0x%04X" % data_mask)
+    print("  data_mask: 0b%s" % o_to_binstr(data_mask))
     assert nok == 0
 
 

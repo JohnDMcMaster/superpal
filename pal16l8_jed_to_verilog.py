@@ -74,10 +74,19 @@ def gen_top(f):
 """ % (sim_time, PINS_DUT_IN - 1, PINS_DUT_IN, PINS_DUT_OUT - 1, sim_step,
        PINS_DUT_OUT))
 
+    ifmt = "%h" * PINS_DUT_IN
+    ofmt = "%h" * PINS_DUT_OUT
+    iargs = ", ".join("pali[%u]" % (PINS_DUT_IN - i - 1)
+                      for i in range(PINS_DUT_IN))
+    oargs = ", ".join("palo[%u]" % (PINS_DUT_OUT - i - 1)
+                      for i in range(PINS_DUT_OUT))
+
     line("""
   initial
-     $monitor("At time %t, i = %h (%0d), o = %h (%0d)",
-              $time, pali, pali, palo, palo);
+     $monitor("t=%t, i=""" + ifmt + """, o=""" + ofmt + """",
+              $time,
+              """ + iargs + """,
+              """ + oargs + """);
 endmodule
 """)
 
@@ -226,43 +235,46 @@ def parse_terms(jedutil_out):
 
     # gen_pindefs(lines)
     print('looping for logic defs')
-    lines = list(lines_orig)
-    for l in lines:
-        l = l.strip()
-        m = re.match("/(o.*) = (.*)", l)
-        if not m:
-            continue
-        # print('checking: ', l)
-        l_pinn = int(m.group(1)[1:])
-        output = pin_n2verilog(l_pinn)
-        rhs = m.group(2)
+    # propagate potential loops to new definitions on metadata['looped']
+    for _loops in range(8):
+        lines = list(lines_orig)
+        for l in lines:
+            l = l.strip()
+            m = re.match("/(o.*) = (.*)", l)
+            if not m:
+                continue
+            # print('checking: ', l)
+            l_pinn = int(m.group(1)[1:])
+            output = pin_n2verilog(l_pinn)
+            rhs = m.group(2)
 
-        rhs = rhs.replace("/", "~")
-        rhs = rhs.replace("+", "|")
+            rhs = rhs.replace("/", "~")
+            rhs = rhs.replace("+", "|")
 
-        def is_term_looped(x):
-            res = parse_term(x)
-            if res:
-                pinn, _inverted = res
-                # Looped if its equation contains itself
-                return pinn == l_pinn
-            else:
-                return False
+            def is_term_looped(x):
+                res = parse_term(x)
+                if res:
+                    pinn, _inverted = res
+                    # Looped if its equation contains itself
+                    return pinn == l_pinn or metadata['looped'].get(
+                        l_pinn, False)
+                else:
+                    return False
 
-        is_looped = bool(sum([is_term_looped(x) for x in rhs.split(' ')]))
-        metadata['looped'][l_pinn] = is_looped
+            is_looped = bool(sum([is_term_looped(x) for x in rhs.split(' ')]))
+            metadata['looped'][l_pinn] = is_looped
 
-        def munge_term(x):
-            res = parse_term(x)
-            if res:
-                pinn, inverted = res
-                return inverted + pin_n2verilog(pinn)
-            else:
-                return x
+            def munge_term(x):
+                res = parse_term(x)
+                if res:
+                    pinn, inverted = res
+                    return inverted + pin_n2verilog(pinn)
+                else:
+                    return x
 
-        rhs = ' '.join([munge_term(x) for x in rhs.split(' ')])
+            rhs = ' '.join([munge_term(x) for x in rhs.split(' ')])
 
-        terms[output] = '~(%s)' % rhs
+            terms[output] = '~(%s)' % rhs
     return terms, metadata
 
 

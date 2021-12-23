@@ -18,6 +18,35 @@ LSB is output first for simplicity
 """
 
 
+def pad_(s):
+    # Starting from right, add _ every 4 chars
+    ret = ""
+    ri = 0
+    for i in range(len(s)):
+        i = len(s) - i - 1
+        if ri and ri % 4 == 0:
+            ret = "_" + ret
+        ret = s[i] + ret
+        ri += 1
+    return ret
+
+
+def epromi_to_binstr(x):
+    return pad_(format(x, '0%ub' % 18))
+
+
+def epromo_to_binstr(x):
+    return pad_(format(x, '0%ub' % 8))
+
+
+def i_to_binstr(x):
+    return pad_(format(x, '0%ub' % pal16l8_jed_to_verilog.PINS_DUT_IN))
+
+
+def o_to_binstr(x):
+    return pad_(format(x, '0%ub' % pal16l8_jed_to_verilog.PINS_DUT_OUT))
+
+
 def parse_sim(fn):
     """
     t=                   0, i=0000000000, o=1x101111
@@ -68,8 +97,16 @@ def parse_pal866_simple(fn):
 
 
 def check_sim_vs_electrical(sim, electrical, pin_metadata):
+    verbose = False
     assert len(sim) == len(electrical), (
         "%u sim entries but %u tocheck entries" % (len(sim), len(electrical)))
+    n_entries = len(electrical)
+    print("Checking 0x%04X entries" % n_entries)
+
+    # MSB first
+    in_bits = pal16l8_jed_to_verilog.PINS_DUT_IN
+    out_bits = pal16l8_jed_to_verilog.PINS_DUT_OUT
+    assert len(sim[0]) == pal16l8_jed_to_verilog.PINS_DUT_OUT
 
     # Loopback makes read out unstable
     # Verify as much as possible though
@@ -84,15 +121,14 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata):
 
     ok = 0
     nok = 0
-    # MSB first
-    out_bits = len(sim[0])
-
-    def o_to_binstr(x):
-        return format(x, '0%ub' % out_bits)
 
     print("Out bits: %u" % out_bits)
     for addr in range(len(sim)):
         obits = o_to_binstr(electrical[addr])
+        verbose and print("0b_%s:    sim 0b_%s cap 0b_%s mask 0b_%s" %
+                          (i_to_binstr(addr), pad_(
+                              sim[addr]), obits, o_to_binstr(data_mask)))
+
         for biti in range(out_bits):
             # Skip this bit?
             if not ((1 << biti) & data_mask):
@@ -103,11 +139,12 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata):
                 continue
             bit_sim = int(bit_sim)
             bit_electrical = (electrical[addr] >> biti) & 1
+
             if bit_sim != bit_electrical:
                 print(
-                    "0x%04X: sim 0b%s cap 0b%s mask 0b%s (bit %u: %s vs %s)" %
-                    (addr, sim[addr], obits, o_to_binstr(data_mask), biti,
-                     bit_sim, bit_electrical))
+                    "0b_%s: :( sim 0b_%s cap 0b_%s mask 0b_%s (bit %u: %s vs %s)"
+                    % (i_to_binstr(addr), pad_(sim[addr]), obits,
+                       o_to_binstr(data_mask), biti, bit_sim, bit_electrical))
                 nok += 1
                 break
             ok += 1
@@ -116,7 +153,7 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata):
     print("  ok: 0x%04X" % ok)
     print("  nok: 0x%04X" % nok)
     print("  looped pins: %u" % looped_pins)
-    print("  data_mask: 0b%s" % o_to_binstr(data_mask))
+    print("  data_mask: 0b_%s" % o_to_binstr(data_mask))
     assert nok == 0
 
 
@@ -132,12 +169,77 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata):
     http://dreamjam.co.uk/emuviews/files/adapter-v2-cap.png
     Pin mapping appears to be what I'd call "intuitive"
     """
-    assert pal16l8_jed_to_verilog.PINS_DUT_OUT == 8, "FIXME: only implemented trivial case"
+    verbose = False
     sim = parse_sim(sim_fn)
     eprom = open(readpal_fn, "rb").read()
     electrical = []
-    for addr in range(1 << pal16l8_jed_to_verilog.PINS_DUT_IN):
-        electrical.append(eprom[addr])
+    # All outputs as simple bytes
+    if 0 and pal16l8_jed_to_verilog.PINS_DUT_OUT == 8:
+        # XXX: verify redundant addresses?
+        # in case of latches may not be identical though
+        for addr in range(1 << pal16l8_jed_to_verilog.PINS_DUT_IN):
+            electrical.append(eprom[addr])
+    # Fractional word w/ shared input/output
+    # Similarly, grab only a sample word, don't grab all word permutations
+    # (the lowest address one)
+    else:
+        # 256 KB of data
+        # 16 address lines
+        # 8 bits captured at each
+        # should be 64 KB?
+        # guess 12 and 19 are toggled as well
+        print(pal16l8_jed_to_verilog.PINS_DUT)
+        ipins = [
+            x[0] for x in pal16l8_jed_to_verilog.PINS_DUT.items()
+            if x[1] == 'i'
+        ]
+        opins = [
+            x[0] for x in pal16l8_jed_to_verilog.PINS_DUT.items()
+            if x[1] == 'o'
+        ]
+        print('ipins', ipins)
+        print('opins', opins)
+
+        # Map logical pins to address space
+        # LSB first
+        ipin_eprom_addr_bits = []
+        for addr_bit, (_pinn, io) in enumerate(
+                pal16l8_jed_to_verilog.PINS_DUT.items()):
+            if io == 'i':
+                ipin_eprom_addr_bits.append(addr_bit)
+            else:
+                assert io == 'o'
+        print("ipin_eprom_addr_bits", ipin_eprom_addr_bits)
+
+        opin_eprom_data_bits = []
+        for data_bit, pinn in enumerate(range(12, 20)):
+            io = pal16l8_jed_to_verilog.PINS_DUT[pinn]
+            if io == 'o':
+                opin_eprom_data_bits.append(data_bit)
+        print("opin_eprom_data_bits", opin_eprom_data_bits)
+
+        # Now extract words using bit mapping
+        for logical_addr in range(1 << pal16l8_jed_to_verilog.PINS_DUT_IN):
+            # Create address
+            eprom_addr = 0
+            for logical_addri, eprom_addri in enumerate(ipin_eprom_addr_bits):
+                if logical_addr & (1 << logical_addri):
+                    eprom_addr |= (1 << eprom_addri)
+            # Get raw word
+            eprom_word = eprom[eprom_addr]
+
+            # extract bits, we may not be using the whole word
+            logical_word = 0
+            for logical_biti, eprom_biti in enumerate(opin_eprom_data_bits):
+                if eprom_word & (1 << eprom_biti):
+                    logical_word |= (1 << logical_biti)
+
+            verbose and print(
+                "EPROM  %s : %s  =>  logical  %s : %s" %
+                (epromi_to_binstr(eprom_addr), epromo_to_binstr(eprom_word),
+                 i_to_binstr(logical_addr), o_to_binstr(logical_word)))
+            electrical.append(logical_word)
+
     check_sim_vs_electrical(sim, electrical, pin_metadata)
 
 

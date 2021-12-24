@@ -34,10 +34,13 @@ Step 2: extract .jed
   * I dumped something as PAL16L8 that should have been PAL16R8, so I added --part to fixup here
 
 Step 3: verify test vectors
-* pal16l8_sim.py \
+
+```
+$ pal16l8_sim.py \
         --verify-pal866 pal866.jl \
         --verify-readpal readpal.bin \
         pal16l8.jed
+```
 
 This will convert the .jed into verify and simulate changing inputs.
 The simulation is compared to test vectors and it will generate a coverage report

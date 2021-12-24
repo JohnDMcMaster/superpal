@@ -66,6 +66,8 @@ Calculated pins: 10 input, 8 output
 looping for logic defs
 Compiling sim
 Running sim
+
+Verifying pal866/p22.jl
 Checking 0x0400 entries
 Out bits: 8
 Summary
@@ -73,6 +75,8 @@ Summary
   nok: 0x0000
   looped pins: 2
   data_mask: 0b_1111_0101
+
+Verifying readpal/p22.bin
 Checking 0x0400 entries
 Out bits: 8
 Summary

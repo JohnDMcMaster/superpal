@@ -158,6 +158,7 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata):
 
 
 def run_verify_pal866(pal866_fn, sim_fn, pin_metadata):
+    print("Verifying", pal866_fn)
     sim = parse_sim(sim_fn)
     pal866 = parse_pal866_simple(pal866_fn)
     check_sim_vs_electrical(sim, pal866, pin_metadata)
@@ -170,6 +171,7 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata):
     Pin mapping appears to be what I'd call "intuitive"
     """
     verbose = False
+    print("Verifying", readpal_fn)
     sim = parse_sim(sim_fn)
     eprom = open(readpal_fn, "rb").read()
     electrical = []
@@ -276,11 +278,14 @@ def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
     open(sim_log_fn, "w").write(sim_out)
 
     if verify_pal866:
+        print("")
         run_verify_pal866(verify_pal866, sim_log_fn, pin_metadata)
 
     if verify_readpal:
+        print("")
         run_verify_readpal(verify_readpal, sim_log_fn, pin_metadata)
 
+    print("")
     print("Done")
 
 

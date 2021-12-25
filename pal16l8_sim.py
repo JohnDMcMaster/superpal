@@ -96,8 +96,7 @@ def parse_pal866_simple(fn):
     return ret
 
 
-def check_sim_vs_electrical(sim, electrical, pin_metadata):
-    verbose = False
+def check_sim_vs_electrical(sim, electrical, pin_metadata, verbose=False):
     assert len(sim) == len(electrical), (
         "%u sim entries but %u tocheck entries" % (len(sim), len(electrical)))
     n_entries = len(electrical)
@@ -157,20 +156,26 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata):
     assert nok == 0
 
 
-def run_verify_pal866(pal866_fn, sim_fn, pin_metadata):
+def run_verify_pal866(pal866_fn, sim_fn, pin_metadata, verbose=False):
     print("Verifying", pal866_fn)
     sim = parse_sim(sim_fn)
     pal866 = parse_pal866_simple(pal866_fn)
-    check_sim_vs_electrical(sim, pal866, pin_metadata)
+    check_sim_vs_electrical(sim, pal866, pin_metadata, verbose=verbose)
 
 
-def run_verify_readpal(readpal_fn, sim_fn, pin_metadata):
+def print_pinmap():
+    print("Pin map:")
+    for pinn in pal16l8_jed_to_verilog.PINS_DUT.keys():
+        bus, n = pal16l8_jed_to_verilog.pin_n2vio(pinn)
+        net = "%s[%u]" % (bus, n)
+        print("  P%u => %s" % (pinn, net))
+
+def run_verify_readpal(readpal_fn, sim_fn, pin_metadata, verbose=False):
     """
     http://techno-junk.org/readpal.php
     http://dreamjam.co.uk/emuviews/files/adapter-v2-cap.png
     Pin mapping appears to be what I'd call "intuitive"
     """
-    verbose = False
     print("Verifying", readpal_fn)
     sim = parse_sim(sim_fn)
     eprom = open(readpal_fn, "rb").read()
@@ -190,7 +195,7 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata):
         # 8 bits captured at each
         # should be 64 KB?
         # guess 12 and 19 are toggled as well
-        print(pal16l8_jed_to_verilog.PINS_DUT)
+        print_pinmap()
         ipins = [
             x[0] for x in pal16l8_jed_to_verilog.PINS_DUT.items()
             if x[1] == 'i'
@@ -199,8 +204,8 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata):
             x[0] for x in pal16l8_jed_to_verilog.PINS_DUT.items()
             if x[1] == 'o'
         ]
-        print('ipins', ipins)
-        print('opins', opins)
+        verbose and print('ipins', ipins)
+        verbose and print('opins', opins)
 
         # Map logical pins to address space
         # LSB first
@@ -211,14 +216,14 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata):
                 ipin_eprom_addr_bits.append(addr_bit)
             else:
                 assert io == 'o'
-        print("ipin_eprom_addr_bits", ipin_eprom_addr_bits)
+        verbose and print("ipin_eprom_addr_bits", ipin_eprom_addr_bits)
 
         opin_eprom_data_bits = []
         for data_bit, pinn in enumerate(range(12, 20)):
             io = pal16l8_jed_to_verilog.PINS_DUT[pinn]
             if io == 'o':
                 opin_eprom_data_bits.append(data_bit)
-        print("opin_eprom_data_bits", opin_eprom_data_bits)
+        verbose and print("opin_eprom_data_bits", opin_eprom_data_bits)
 
         # Now extract words using bit mapping
         for logical_addr in range(1 << pal16l8_jed_to_verilog.PINS_DUT_IN):
@@ -242,7 +247,7 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata):
                  i_to_binstr(logical_addr), o_to_binstr(logical_word)))
             electrical.append(logical_word)
 
-    check_sim_vs_electrical(sim, electrical, pin_metadata)
+    check_sim_vs_electrical(sim, electrical, pin_metadata, verbose=verbose)
 
 
 def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
@@ -279,11 +284,11 @@ def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
 
     if verify_pal866:
         print("")
-        run_verify_pal866(verify_pal866, sim_log_fn, pin_metadata)
+        run_verify_pal866(verify_pal866, sim_log_fn, pin_metadata, verbose=verbose)
 
     if verify_readpal:
         print("")
-        run_verify_readpal(verify_readpal, sim_log_fn, pin_metadata)
+        run_verify_readpal(verify_readpal, sim_log_fn, pin_metadata, verbose=verbose)
 
     print("")
     print("Done")

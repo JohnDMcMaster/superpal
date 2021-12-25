@@ -96,7 +96,13 @@ def parse_pal866_simple(fn):
     return ret
 
 
-def check_sim_vs_electrical(sim, electrical, pin_metadata, verbose=False):
+def check_sim_vs_electrical(sim, electrical, pin_metadata, debug_electrical_bin=None, verbose=False):
+    if debug_electrical_bin:
+        buff = bytearray(len(electrical))
+        for addr, val in enumerate(electrical):
+            buff[addr] = val
+        open(debug_electrical_bin, "wb").write(buff)
+
     assert len(sim) == len(electrical), (
         "%u sim entries but %u tocheck entries" % (len(sim), len(electrical)))
     n_entries = len(electrical)
@@ -156,11 +162,12 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata, verbose=False):
     assert nok == 0
 
 
-def run_verify_pal866(pal866_fn, sim_fn, pin_metadata, verbose=False):
+def run_verify_pal866(pal866_fn, sim_fn, pin_metadata, tmp_dir, verbose=False):
     print("Verifying", pal866_fn)
     sim = parse_sim(sim_fn)
     pal866 = parse_pal866_simple(pal866_fn)
-    check_sim_vs_electrical(sim, pal866, pin_metadata, verbose=verbose)
+    debug_electrical_bin = os.path.join(tmp_dir, "sim_pal866.bin")
+    check_sim_vs_electrical(sim, pal866, pin_metadata, debug_electrical_bin=debug_electrical_bin, verbose=verbose)
 
 
 def print_pinmap():
@@ -170,7 +177,7 @@ def print_pinmap():
         net = "%s[%u]" % (bus, n)
         print("  P%u => %s" % (pinn, net))
 
-def run_verify_readpal(readpal_fn, sim_fn, pin_metadata, verbose=False):
+def run_verify_readpal(readpal_fn, sim_fn, pin_metadata, tmp_dir, verbose=False):
     """
     http://techno-junk.org/readpal.php
     http://dreamjam.co.uk/emuviews/files/adapter-v2-cap.png
@@ -247,7 +254,8 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata, verbose=False):
                  i_to_binstr(logical_addr), o_to_binstr(logical_word)))
             electrical.append(logical_word)
 
-    check_sim_vs_electrical(sim, electrical, pin_metadata, verbose=verbose)
+    debug_electrical_bin = os.path.join(tmp_dir, "sim_readpal.bin")
+    check_sim_vs_electrical(sim, electrical, pin_metadata, debug_electrical_bin=debug_electrical_bin, verbose=verbose)
 
 
 def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
@@ -288,7 +296,7 @@ def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
 
     if verify_readpal:
         print("")
-        run_verify_readpal(verify_readpal, sim_log_fn, pin_metadata, verbose=verbose)
+        run_verify_readpal(verify_readpal, sim_log_fn, pin_metadata, tmp_dir=tmp_dir, verbose=verbose)
 
     print("")
     print("Done")

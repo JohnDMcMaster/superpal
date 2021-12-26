@@ -1,8 +1,9 @@
 #!/usr/bin/python3
 
 from superpal.util import add_bool_arg
-import pal16l8_jed_to_verilog
+import pal16xx_jed_to_verilog
 from superpal.verilog.vutil import pad_
+from superpal.verilog.jed_to_verilog import jed_fn2cls
 
 import shutil
 import os
@@ -93,15 +94,16 @@ def check_sim_vs_electrical(pal,
     print("Checking 0x%04X entries" % n_entries)
 
     # MSB first
-    in_bits = pal.PINS_DUT_IN
-    out_bits = pal.PINS_DUT_OUT
-    assert len(sim[0]) == pal.PINS_DUT_OUT
+    # in_bits = pal.PINS_DUT_IN
+    out_bits = pal.get_npins_out()
+    assert len(sim[0]) == pal.get_npins_out()
 
     # Loopback makes read out unstable
     # Verify as much as possible though
     looped_pins = 0
-    data_mask = (1 << pal.PINS_DUT_OUT) - 1
+    data_mask = (1 << pal.get_npins_out()) - 1
     for pinn, looped in pal.metadata['looped'].items():
+        print('tmp', pinn)
         if looped:
             net, index = pal.pin_n2vio(pinn)
             assert net == "o"
@@ -178,10 +180,10 @@ def run_verify_readpal(pal, readpal_fn, sim_fn, tmp_dir, verbose=False):
     eprom = open(readpal_fn, "rb").read()
     electrical = []
     # All outputs as simple bytes
-    if 0 and pal.PINS_DUT_OUT == 8:
+    if 0 and pal.get_npins_out() == 8:
         # XXX: verify redundant addresses?
         # in case of latches may not be identical though
-        for addr in range(1 << pal.PINS_DUT_IN):
+        for addr in range(1 << pal.get_npins_in()):
             electrical.append(eprom[addr])
     # Fractional word w/ shared input/output
     # Similarly, grab only a sample word, don't grab all word permutations
@@ -216,7 +218,7 @@ def run_verify_readpal(pal, readpal_fn, sim_fn, tmp_dir, verbose=False):
         verbose and print("opin_eprom_data_bits", opin_eprom_data_bits)
 
         # Now extract words using bit mapping
-        for logical_addr in range(1 << pal.PINS_DUT_IN):
+        for logical_addr in range(1 << pal.get_npins_in()):
             # Create address
             eprom_addr = 0
             for logical_addri, eprom_addri in enumerate(ipin_eprom_addr_bits):
@@ -253,19 +255,19 @@ def run(jed_fn_in,
     shutil.rmtree(tmp_dir, ignore_errors=True)
     os.mkdir(tmp_dir)
     shutil.copy(jed_fn_in, tmp_dir + "/dut.jed")
-    root_dir = os.path.dirname(os.path.abspath(__file__))
+    # root_dir = os.path.dirname(os.path.abspath(__file__))
+    jed_fn_in = tmp_dir + "/dut.jed"
+    v_fn_out = tmp_dir + "/sim_top.v"
+    view_fn = tmp_dir + "/dut.view"
+    view_j_fn = tmp_dir + "/dut_view.json"
 
     cd = "cd %s &&" % (tmp_dir, )
 
-    print("Converting to view")
-    subprocess.check_output(cd + "jedutil -view dut.jed PAL16L8 >dut.view",
-                            shell=True,
-                            encoding="ascii")
-
     print("Converting to verilog")
-    # subprocess.check_output(cd + root_dir + "/pal16l8_jed_to_verilog.py dut.jed sim_top.v", shell=True, encoding="ascii")
-    pal = pal16l8_jed_to_verilog.run(tmp_dir + "/dut.jed",
-                                     tmp_dir + "/sim_top.v")
+    pal = pal16xx_jed_to_verilog.run(jed_fn_in=jed_fn_in,
+                                     v_fn_out=v_fn_out,
+                                     view_fn=view_fn,
+                                     view_j_fn=view_j_fn)
 
     print("Compiling sim")
     subprocess.check_output(cd + "iverilog -o sim_top.iv sim_top.v",

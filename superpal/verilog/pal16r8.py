@@ -8,12 +8,18 @@ from . import vutil
 # this info can be parsed from jedutil output
 
 
-class PAL16L8(vutil.PAL):
+class PAL16R8(vutil.PAL):
+    def __init__(self, *args, **kwargs):
+        self.PIN_CLK = 1
+        self.PIN_OEn = 11
+        vutil.PAL.__init__(self, *args, **kwargs)
+
     def part(self):
-        return "PAL16L8"
+        return "PAL16R8"
 
     def is_io_pinn(self, pinn):
-        return pinn not in (self.PIN_GND, self.PIN_VCC)
+        return pinn not in (self.PIN_GND, self.PIN_VCC, self.PIN_CLK,
+                            self.PIN_OEn)
 
     def verilog_write_top(self, f):
         def line(l):

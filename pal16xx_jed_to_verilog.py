@@ -5,7 +5,7 @@ Moving instead to generate the module + test harness together
 This removes tristates entirely as we just know whether something is an input or output
 """
 
-from superpal.verilog.pal16l8 import run
+from superpal.verilog.jed_to_verilog import run
 
 
 def main():

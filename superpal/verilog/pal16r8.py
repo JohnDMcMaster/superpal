@@ -1,11 +1,15 @@
+"""
+Something loosely resembling a sim but needs tuning
+
+Which edge?
+"""
+
 from collections import OrderedDict
 import re
 import json
 import subprocess
 
 from . import vutil
-
-# this info can be parsed from jedutil output
 
 
 class PAL16R8(vutil.PAL):
@@ -31,25 +35,36 @@ class PAL16R8(vutil.PAL):
         """
         # sim_time = 102500
         sim_step = 100
-        sim_time = ((1 << self.get_npins_in()) + 1) * sim_step
+        # clk step + addr step
+        sim_time = ((1 << self.get_npins_in()) + 1) * 2 * sim_step
 
         line("module sim_top();")
         line("""
   initial begin
      # %u $finish;
   end
+""" % sim_time)
 
+        line("""
+  reg clk = 1'b0;
   reg [%u:0] pali = %u'b0;
   wire [%u:0] palo;
   always #%u begin
     pali = pali + %u'b1;
   end
 
+""" % (self.get_npins_in() - 1, self.get_npins_in(), self.get_npins_out() - 1,
+        2 * sim_step, self.get_npins_out()))
+
+        line("""
+  always #%u begin
+    clk = ~clk;
+  end
+
   dut dut(
     .i(pali),
     .o(palo));
-""" % (sim_time, self.get_npins_in() - 1, self.get_npins_in(),
-        self.get_npins_out() - 1, sim_step, self.get_npins_out()))
+""" % (sim_time, ))
 
         ifmt = "%h" * self.get_npins_in()
         ofmt = "%h" * self.get_npins_out()
@@ -72,14 +87,37 @@ endmodule
             f.write(l + "\n")
 
         line('module dut(')
+        line('        input wire clk,')
         line('        input wire [%u:0] i,' % (self.get_npins_in() - 1, ))
         line('        output wire [%u:0] o' % (self.get_npins_out() - 1, ))
         line('    );')
 
+        def rname(pinn):
+            return self.pin_n2verilog(pinn).replace("o", "oreg").replace(
+                '[', '').replace(']', '')
+
+        # Register definitions
         for pinn, func in self.PINS_DUT.items():
             if func == "o":
-                vname = self.pin_n2verilog(pinn)
-                line('    assign %s = %s;' % (vname, terms[vname]))
+                line("    reg %s = 1'b0;" % (rname(pinn), ))
+
+        line("")
+
+        # Assign output wires to internal regs
+        for pinn, func in self.PINS_DUT.items():
+            if func == "o":
+                line('    assign %s = %s;' %
+                     (self.pin_n2verilog(pinn), rname(pinn)))
+
+        line("")
+
+        # Main logic
+        line('    always @(posedge clk) begin')
+        for pinn, func in self.PINS_DUT.items():
+            if func == "o":
+                line('        %s <= %s;' %
+                     (rname(pinn), terms[self.pin_n2verilog(pinn)]))
+        line('    end')
 
         line('endmodule')
 

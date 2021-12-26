@@ -318,6 +318,7 @@ class PAL:
                         break
 
     def view_to_verilog_terms(self):
+        # output net name to equation
         terms = {}
         for (_lhs_net, equation) in self.view.equations.items():
             _lhs_isinv, (_lhs_bus, lhs_pinn), _oper, rhs_terms = equation

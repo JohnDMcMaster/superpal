@@ -2,6 +2,7 @@
 
 from superpal.util import add_bool_arg
 import pal16l8_jed_to_verilog
+from superpal.verilog.vutil import pad_
 
 import shutil
 import os
@@ -18,33 +19,12 @@ LSB is output first for simplicity
 """
 
 
-def pad_(s):
-    # Starting from right, add _ every 4 chars
-    ret = ""
-    ri = 0
-    for i in range(len(s)):
-        i = len(s) - i - 1
-        if ri and ri % 4 == 0:
-            ret = "_" + ret
-        ret = s[i] + ret
-        ri += 1
-    return ret
-
-
 def epromi_to_binstr(x):
     return pad_(format(x, '0%ub' % 18))
 
 
 def epromo_to_binstr(x):
     return pad_(format(x, '0%ub' % 8))
-
-
-def i_to_binstr(x):
-    return pad_(format(x, '0%ub' % pal16l8_jed_to_verilog.PINS_DUT_IN))
-
-
-def o_to_binstr(x):
-    return pad_(format(x, '0%ub' % pal16l8_jed_to_verilog.PINS_DUT_OUT))
 
 
 def parse_sim(fn):
@@ -90,13 +70,17 @@ def parse_pal866_raw(fn):
 def parse_pal866_simple(fn):
     header, lines = parse_pal866_raw(fn)
     assert header["part"] == "PAL16L8"
-    ret = {}
+    ret = [None] * len(lines)
     for (input, output, _transition) in lines:
         ret[input] = output
     return ret
 
 
-def check_sim_vs_electrical(sim, electrical, pin_metadata, debug_electrical_bin=None, verbose=False):
+def check_sim_vs_electrical(pal,
+                            sim,
+                            electrical,
+                            debug_electrical_bin=None,
+                            verbose=False):
     if debug_electrical_bin:
         buff = bytearray(len(electrical))
         for addr, val in enumerate(electrical):
@@ -109,17 +93,17 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata, debug_electrical_bin=
     print("Checking 0x%04X entries" % n_entries)
 
     # MSB first
-    in_bits = pal16l8_jed_to_verilog.PINS_DUT_IN
-    out_bits = pal16l8_jed_to_verilog.PINS_DUT_OUT
-    assert len(sim[0]) == pal16l8_jed_to_verilog.PINS_DUT_OUT
+    in_bits = pal.PINS_DUT_IN
+    out_bits = pal.PINS_DUT_OUT
+    assert len(sim[0]) == pal.PINS_DUT_OUT
 
     # Loopback makes read out unstable
     # Verify as much as possible though
     looped_pins = 0
-    data_mask = (1 << pal16l8_jed_to_verilog.PINS_DUT_OUT) - 1
-    for pinn, looped in pin_metadata['looped'].items():
+    data_mask = (1 << pal.PINS_DUT_OUT) - 1
+    for pinn, looped in pal.metadata['looped'].items():
         if looped:
-            net, index = pal16l8_jed_to_verilog.pin_n2vio(pinn)
+            net, index = pal.pin_n2vio(pinn)
             assert net == "o"
             data_mask ^= 1 << index
             looped_pins += 1
@@ -129,10 +113,10 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata, debug_electrical_bin=
 
     print("Out bits: %u" % out_bits)
     for addr in range(len(sim)):
-        obits = o_to_binstr(electrical[addr])
+        obits = pal.o_to_binstr(electrical[addr])
         verbose and print("0b_%s:    sim 0b_%s cap 0b_%s mask 0b_%s" %
-                          (i_to_binstr(addr), pad_(
-                              sim[addr]), obits, o_to_binstr(data_mask)))
+                          (pal.i_to_binstr(addr), pad_(
+                              sim[addr]), obits, pal.o_to_binstr(data_mask)))
 
         for biti in range(out_bits):
             # Skip this bit?
@@ -148,8 +132,9 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata, debug_electrical_bin=
             if bit_sim != bit_electrical:
                 print(
                     "0b_%s: :( sim 0b_%s cap 0b_%s mask 0b_%s (bit %u: %s vs %s)"
-                    % (i_to_binstr(addr), pad_(sim[addr]), obits,
-                       o_to_binstr(data_mask), biti, bit_sim, bit_electrical))
+                    % (pal.i_to_binstr(addr), pad_(
+                        sim[addr]), obits, pal.o_to_binstr(data_mask), biti,
+                       bit_sim, bit_electrical))
                 nok += 1
                 break
             ok += 1
@@ -158,26 +143,31 @@ def check_sim_vs_electrical(sim, electrical, pin_metadata, debug_electrical_bin=
     print("  ok: 0x%04X" % ok)
     print("  nok: 0x%04X" % nok)
     print("  looped pins: %u" % looped_pins)
-    print("  data_mask: 0b_%s" % o_to_binstr(data_mask))
+    print("  data_mask: 0b_%s" % pal.o_to_binstr(data_mask))
     assert nok == 0
 
 
-def run_verify_pal866(pal866_fn, sim_fn, pin_metadata, tmp_dir, verbose=False):
+def run_verify_pal866(pal, pal866_fn, sim_fn, tmp_dir, verbose=False):
     print("Verifying", pal866_fn)
     sim = parse_sim(sim_fn)
     pal866 = parse_pal866_simple(pal866_fn)
     debug_electrical_bin = os.path.join(tmp_dir, "sim_pal866.bin")
-    check_sim_vs_electrical(sim, pal866, pin_metadata, debug_electrical_bin=debug_electrical_bin, verbose=verbose)
+    check_sim_vs_electrical(pal,
+                            sim,
+                            pal866,
+                            debug_electrical_bin=debug_electrical_bin,
+                            verbose=verbose)
 
 
-def print_pinmap():
+def print_pinmap(pal):
     print("Pin map:")
-    for pinn in pal16l8_jed_to_verilog.PINS_DUT.keys():
-        bus, n = pal16l8_jed_to_verilog.pin_n2vio(pinn)
+    for pinn in pal.PINS_DUT.keys():
+        bus, n = pal.pin_n2vio(pinn)
         net = "%s[%u]" % (bus, n)
         print("  P%u => %s" % (pinn, net))
 
-def run_verify_readpal(readpal_fn, sim_fn, pin_metadata, tmp_dir, verbose=False):
+
+def run_verify_readpal(pal, readpal_fn, sim_fn, tmp_dir, verbose=False):
     """
     http://techno-junk.org/readpal.php
     http://dreamjam.co.uk/emuviews/files/adapter-v2-cap.png
@@ -188,10 +178,10 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata, tmp_dir, verbose=False)
     eprom = open(readpal_fn, "rb").read()
     electrical = []
     # All outputs as simple bytes
-    if 0 and pal16l8_jed_to_verilog.PINS_DUT_OUT == 8:
+    if 0 and pal.PINS_DUT_OUT == 8:
         # XXX: verify redundant addresses?
         # in case of latches may not be identical though
-        for addr in range(1 << pal16l8_jed_to_verilog.PINS_DUT_IN):
+        for addr in range(1 << pal.PINS_DUT_IN):
             electrical.append(eprom[addr])
     # Fractional word w/ shared input/output
     # Similarly, grab only a sample word, don't grab all word permutations
@@ -202,23 +192,16 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata, tmp_dir, verbose=False)
         # 8 bits captured at each
         # should be 64 KB?
         # guess 12 and 19 are toggled as well
-        print_pinmap()
-        ipins = [
-            x[0] for x in pal16l8_jed_to_verilog.PINS_DUT.items()
-            if x[1] == 'i'
-        ]
-        opins = [
-            x[0] for x in pal16l8_jed_to_verilog.PINS_DUT.items()
-            if x[1] == 'o'
-        ]
+        print_pinmap(pal)
+        ipins = [x[0] for x in pal.PINS_DUT.items() if x[1] == 'i']
+        opins = [x[0] for x in pal.PINS_DUT.items() if x[1] == 'o']
         verbose and print('ipins', ipins)
         verbose and print('opins', opins)
 
         # Map logical pins to address space
         # LSB first
         ipin_eprom_addr_bits = []
-        for addr_bit, (_pinn, io) in enumerate(
-                pal16l8_jed_to_verilog.PINS_DUT.items()):
+        for addr_bit, (_pinn, io) in enumerate(pal.PINS_DUT.items()):
             if io == 'i':
                 ipin_eprom_addr_bits.append(addr_bit)
             else:
@@ -227,13 +210,13 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata, tmp_dir, verbose=False)
 
         opin_eprom_data_bits = []
         for data_bit, pinn in enumerate(range(12, 20)):
-            io = pal16l8_jed_to_verilog.PINS_DUT[pinn]
+            io = pal.PINS_DUT[pinn]
             if io == 'o':
                 opin_eprom_data_bits.append(data_bit)
         verbose and print("opin_eprom_data_bits", opin_eprom_data_bits)
 
         # Now extract words using bit mapping
-        for logical_addr in range(1 << pal16l8_jed_to_verilog.PINS_DUT_IN):
+        for logical_addr in range(1 << pal.PINS_DUT_IN):
             # Create address
             eprom_addr = 0
             for logical_addri, eprom_addri in enumerate(ipin_eprom_addr_bits):
@@ -251,52 +234,66 @@ def run_verify_readpal(readpal_fn, sim_fn, pin_metadata, tmp_dir, verbose=False)
             verbose and print(
                 "EPROM  %s : %s  =>  logical  %s : %s" %
                 (epromi_to_binstr(eprom_addr), epromo_to_binstr(eprom_word),
-                 i_to_binstr(logical_addr), o_to_binstr(logical_word)))
+                 pal.i_to_binstr(logical_addr), pal.o_to_binstr(logical_word)))
             electrical.append(logical_word)
 
     debug_electrical_bin = os.path.join(tmp_dir, "sim_readpal.bin")
-    check_sim_vs_electrical(sim, electrical, pin_metadata, debug_electrical_bin=debug_electrical_bin, verbose=verbose)
+    check_sim_vs_electrical(pal,
+                            sim,
+                            electrical,
+                            debug_electrical_bin=debug_electrical_bin,
+                            verbose=verbose)
 
 
-def run(jed_fn_in, verify_readpal=False, verify_pal866=False, verbose=False):
+def run(jed_fn_in,
+        verify_readpal_fn=None,
+        verify_pal866_fn=None,
+        verbose=False):
     tmp_dir = "vtmp"
     shutil.rmtree(tmp_dir, ignore_errors=True)
     os.mkdir(tmp_dir)
-    shutil.copy(jed_fn_in, tmp_dir + "/pal16l8.jed")
+    shutil.copy(jed_fn_in, tmp_dir + "/dut.jed")
     root_dir = os.path.dirname(os.path.abspath(__file__))
 
     cd = "cd %s &&" % (tmp_dir, )
 
     print("Converting to view")
-    subprocess.check_output(cd +
-                            "jedutil -view pal16l8.jed PAL16L8 >pal16l8.view",
+    subprocess.check_output(cd + "jedutil -view dut.jed PAL16L8 >dut.view",
                             shell=True,
                             encoding="ascii")
 
     print("Converting to verilog")
-    # subprocess.check_output(cd + root_dir + "/pal16l8_jed_to_verilog.py pal16l8.jed pal16l8_sim.v", shell=True, encoding="ascii")
-    pin_metadata = pal16l8_jed_to_verilog.run(tmp_dir + "/pal16l8.jed",
-                                              tmp_dir + "/pal16l8_sim.v")
+    # subprocess.check_output(cd + root_dir + "/pal16l8_jed_to_verilog.py dut.jed sim_top.v", shell=True, encoding="ascii")
+    pal = pal16l8_jed_to_verilog.run(tmp_dir + "/dut.jed",
+                                     tmp_dir + "/sim_top.v")
 
     print("Compiling sim")
-    subprocess.check_output(cd + "iverilog -o pal16l8_sim.iv pal16l8_sim.v",
+    subprocess.check_output(cd + "iverilog -o sim_top.iv sim_top.v",
                             shell=True,
                             encoding="ascii")
 
     print("Running sim")
-    sim_out = subprocess.check_output(cd + "vvp pal16l8_sim.iv",
+    sim_out = subprocess.check_output(cd + "vvp sim_top.iv",
                                       shell=True,
                                       encoding="ascii")
-    sim_log_fn = tmp_dir + "/pal16l8_sim.txt"
+    sim_log_fn = tmp_dir + "/sim_top.txt"
     open(sim_log_fn, "w").write(sim_out)
 
-    if verify_pal866:
+    if verify_pal866_fn:
         print("")
-        run_verify_pal866(verify_pal866, sim_log_fn, pin_metadata, verbose=verbose)
+        run_verify_pal866(pal,
+                          verify_pal866_fn,
+                          sim_log_fn,
+                          tmp_dir,
+                          verbose=verbose)
 
-    if verify_readpal:
+    if verify_readpal_fn:
         print("")
-        run_verify_readpal(verify_readpal, sim_log_fn, pin_metadata, tmp_dir=tmp_dir, verbose=verbose)
+        run_verify_readpal(pal,
+                           verify_readpal_fn,
+                           sim_log_fn,
+                           tmp_dir=tmp_dir,
+                           verbose=verbose)
 
     print("")
     print("Done")
@@ -315,8 +312,8 @@ def main():
     args = parser.parse_args()
 
     run(args.jed_in,
-        verify_readpal=args.verify_readpal,
-        verify_pal866=args.verify_pal866,
+        verify_readpal_fn=args.verify_readpal,
+        verify_pal866_fn=args.verify_pal866,
         verbose=args.verbose)
 
 

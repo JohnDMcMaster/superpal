@@ -103,7 +103,6 @@ def check_sim_vs_electrical(pal,
     looped_pins = 0
     data_mask = (1 << pal.get_npins_out()) - 1
     for pinn, looped in pal.metadata['looped'].items():
-        print('tmp', pinn)
         if looped:
             net, index = pal.pin_n2vio(pinn)
             assert net == "o"
@@ -126,7 +125,7 @@ def check_sim_vs_electrical(pal,
                 continue
             # MSB is first
             bit_sim = sim[addr][out_bits - biti - 1]
-            if bit_sim == 'x':
+            if bit_sim in 'xz':
                 continue
             bit_sim = int(bit_sim)
             bit_electrical = (electrical[addr] >> biti) & 1
@@ -150,7 +149,14 @@ def check_sim_vs_electrical(pal,
 
 
 def run_verify_pal866(pal, pal866_fn, sim_fn, tmp_dir, verbose=False):
+    """
+    Simple toggle through sequential addresses
+    """
     print("Verifying", pal866_fn)
+    # Only supported for trivial case
+    # In theory others should work but under-developed
+    assert pal.part() == "PAL16L8" and pal.get_npins_out(
+    ) == 8, "Unsupported configuration"
     sim = parse_sim(sim_fn)
     pal866 = parse_pal866_simple(pal866_fn)
     debug_electrical_bin = os.path.join(tmp_dir, "sim_pal866.bin")
@@ -178,28 +184,10 @@ def run_verify_readpal(pal, readpal_fn, sim_fn, tmp_dir, verbose=False):
     print("Verifying", readpal_fn)
     sim = parse_sim(sim_fn)
     eprom = open(readpal_fn, "rb").read()
-    electrical = []
-    # All outputs as simple bytes
-    if 0 and pal.get_npins_out() == 8:
-        # XXX: verify redundant addresses?
-        # in case of latches may not be identical though
-        for addr in range(1 << pal.get_npins_in()):
-            electrical.append(eprom[addr])
-    # Fractional word w/ shared input/output
-    # Similarly, grab only a sample word, don't grab all word permutations
-    # (the lowest address one)
-    else:
-        # 256 KB of data
-        # 16 address lines
-        # 8 bits captured at each
-        # should be 64 KB?
-        # guess 12 and 19 are toggled as well
-        print_pinmap(pal)
-        ipins = [x[0] for x in pal.PINS_DUT.items() if x[1] == 'i']
-        opins = [x[0] for x in pal.PINS_DUT.items() if x[1] == 'o']
-        verbose and print('ipins', ipins)
-        verbose and print('opins', opins)
 
+    # All outputs as simple bytes
+
+    def map_ipin_eprom_addr_bits():
         # Map logical pins to address space
         # LSB first
         ipin_eprom_addr_bits = []
@@ -209,15 +197,20 @@ def run_verify_readpal(pal, readpal_fn, sim_fn, tmp_dir, verbose=False):
             else:
                 assert io == 'o'
         verbose and print("ipin_eprom_addr_bits", ipin_eprom_addr_bits)
+        return ipin_eprom_addr_bits
 
+    def map_opin_eprom_data_bits():
         opin_eprom_data_bits = []
         for data_bit, pinn in enumerate(range(12, 20)):
             io = pal.PINS_DUT[pinn]
             if io == 'o':
                 opin_eprom_data_bits.append(data_bit)
         verbose and print("opin_eprom_data_bits", opin_eprom_data_bits)
+        return opin_eprom_data_bits
 
+    def translate_words(ipin_eprom_addr_bits, opin_eprom_data_bits):
         # Now extract words using bit mapping
+        electrical = []
         for logical_addr in range(1 << pal.get_npins_in()):
             # Create address
             eprom_addr = 0
@@ -238,13 +231,84 @@ def run_verify_readpal(pal, readpal_fn, sim_fn, tmp_dir, verbose=False):
                 (epromi_to_binstr(eprom_addr), epromo_to_binstr(eprom_word),
                  pal.i_to_binstr(logical_addr), pal.o_to_binstr(logical_word)))
             electrical.append(logical_word)
+        return electrical
 
-    debug_electrical_bin = os.path.join(tmp_dir, "sim_readpal.bin")
-    check_sim_vs_electrical(pal,
-                            sim,
-                            electrical,
-                            debug_electrical_bin=debug_electrical_bin,
-                            verbose=verbose)
+    """
+    def verify_pal16l8_o8():
+        assert pal.part() == "PAL16L8" and pal.get_npins_out() == 8, "Unsupported configuration"
+
+        electrical = []
+        # XXX: verify redundant addresses?
+        # in case of latches may not be identical though
+        for addr in range(1 << pal.get_npins_in()):
+            electrical.append(eprom[addr])
+
+        debug_electrical_bin = os.path.join(tmp_dir, "sim_readpal.bin")
+        check_sim_vs_electrical(pal,
+                                sim,
+                                electrical,
+                                debug_electrical_bin=debug_electrical_bin,
+                                verbose=verbose)
+    """
+
+    def verify_pal16l8():
+        # Fractional word w/ shared input/output
+        # Similarly, grab only a sample word, don't grab all word permutations
+        # (the lowest address one)
+        # 256 KB of data
+        # 16 address lines
+        # 8 bits captured at each
+        # should be 64 KB?
+        # guess 12 and 19 are toggled as well
+        print_pinmap(pal)
+        ipins = [x[0] for x in pal.PINS_DUT.items() if x[1] == 'i']
+        opins = [x[0] for x in pal.PINS_DUT.items() if x[1] == 'o']
+        verbose and print('ipins', ipins)
+        verbose and print('opins', opins)
+
+        ipin_eprom_addr_bits = map_ipin_eprom_addr_bits()
+        opin_eprom_data_bits = map_opin_eprom_data_bits()
+        electrical = translate_words(ipin_eprom_addr_bits,
+                                     opin_eprom_data_bits)
+
+        debug_electrical_bin = os.path.join(tmp_dir, "sim_readpal.bin")
+
+        check_sim_vs_electrical(pal,
+                                sim,
+                                electrical,
+                                debug_electrical_bin=debug_electrical_bin,
+                                verbose=verbose)
+
+    def verify_pal16r8():
+        """
+        No I/O flexibility
+        However, address lines are tied in with CLK and OEn
+        """
+
+        assert pal.part() == "PAL16R8" and pal.get_npins_out(
+        ) == 8, "Unsupported configuration"
+
+        # 8 inputs + CLK + OEn are simulated
+        # After this just Q outputs are checked, which we already have some coverage on
+        nepromi = pal.get_npins_in() + 2
+
+        electrical = []
+        for addr in range(1 << nepromi):
+            electrical.append(eprom[addr])
+
+        debug_electrical_bin = os.path.join(tmp_dir, "sim_readpal.bin")
+        check_sim_vs_electrical(pal,
+                                sim,
+                                electrical,
+                                debug_electrical_bin=debug_electrical_bin,
+                                verbose=verbose)
+
+    if pal.part() == "PAL16L8":
+        verify_pal16l8()
+    elif pal.part() == "PAL16R8":
+        verify_pal16r8()
+    else:
+        assert 0, pal.part()
 
 
 def run(jed_fn_in,

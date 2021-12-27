@@ -285,38 +285,6 @@ class PAL:
         assert 1 <= pin <= 20
         return self.verilog_pinmap[pin]
 
-    def detect_loop_latches(self):
-        """
-        Latches occur when a term depends on itself
-        Recursively find all terms that have latch dependencies:
-        -They themselves are a latch
-        -They depend on another term that is a latch
-        """
-
-        # By package pin number
-        self.looped = {}
-        for (lhs_net, equation) in self.view.equations.items():
-            _lhs_isinv, (lhs_bus, lhs_pinn), _oper, rhs_terms = equation
-            self.looped[lhs_pinn] = False
-
-        new_loop = True
-        while new_loop:
-            new_loop = False
-            for (lhs_net, equation) in self.view.equations.items():
-                _lhs_isinv, (lhs_bus, lhs_pinn), _oper, rhs_terms = equation
-                if self.looped[lhs_pinn]:
-                    continue
-
-                for termi, term in enumerate(rhs_terms):
-                    # Skip operators
-                    if termi % 2 == 1:
-                        continue
-                    rhs_net, _lhs_isinv, _rhs_buspinn = term
-                    if lhs_net == rhs_net:
-                        self.looped[lhs_pinn] = True
-                        new_loop = True
-                        break
-
     def view_to_verilog_terms(self):
         # output net name to equation
         terms = {}
@@ -359,8 +327,7 @@ class PAL:
         self.gen_io_pindirs()
         self.mk_verilog_pinmap()
 
-        # Current simulation has issues with anything touching latches
-        self.detect_loop_latches()
+        self.create_sim_mask()
         # Convert view AST to verilog AST
         terms = self.view_to_verilog_terms()
         self.verilog_write(terms, v_fn_out)

@@ -15,17 +15,45 @@ import glob
 import copy
 
 
-def dedup_jeds(aglob):
+def dedup_jeds(aglob, vote=False):
     fns = sorted(glob.glob(aglob))
     jeds = []
     print("Checking " + aglob + "...")
     for fn in fns:
         jeds.append(jedutil.load_jed(fn))
-    # Verify equivilence
-    for fn, jed in zip(fns, jeds):
-        print("  " + fn)
-        assert jed['data'] == jeds[0]['data']
-    return jeds[0]
+    if vote:
+        # Vote on most common bit
+        # Then store it to jeds[0] and return that
+        assert len(jeds) == 3
+        words = len(jeds[0]['data'])
+        word_bits = len(jeds[0]['data'][0])
+        data_out = jeds[0]['data']
+        flaky_0s = 0
+        flaky_1s = 0
+        for addr in data_out.keys():
+            newword = ""
+            for biti in range(word_bits):
+                cnt_1s = sum(
+                    [int(jed['data'][addr][biti] == '1') for jed in jeds])
+                if cnt_1s == 1:
+                    flaky_0s += 1
+                if cnt_1s == 2:
+                    flaky_1s += 1
+
+                if cnt_1s >= 2:
+                    newword += '1'
+                else:
+                    newword += '0'
+            data_out[addr] = newword
+        print("Flaky 0s:", flaky_0s)
+        print("Flaky 1s:", flaky_1s)
+        return jeds[0]
+    else:
+        # Verify equivilence
+        for fn, jed in zip(fns, jeds):
+            print("  " + fn)
+            assert jed['data'] == jeds[0]['data']
+        return jeds[0]
 
 
 def combine_jeds(lower, upper):
@@ -39,17 +67,17 @@ def combine_jeds(lower, upper):
     return ret
 
 
-def parse_dir(jed_run_dir):
-    lower = dedup_jeds("%s/*_lower.jed" % jed_run_dir)
-    upper = dedup_jeds("%s/*_upper.jed" % jed_run_dir)
+def parse_dir(jed_run_dir, vote=False):
+    lower = dedup_jeds("%s/*_lower.jed" % jed_run_dir, vote=vote)
+    upper = dedup_jeds("%s/*_upper.jed" % jed_run_dir, vote=vote)
     print("Combining...")
     ret = combine_jeds(lower, upper)
     print("Ready")
     return ret
 
 
-def run(jed_dir, fn_out, part=None):
-    jed = parse_dir(jed_dir)
+def run(jed_dir, fn_out, part=None, vote=False):
+    jed = parse_dir(jed_dir, vote=vote)
     if args.part:
         jed["part"] = part
     jedutil.save_jed(jed, fn_out)
@@ -60,8 +88,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--part', default=None)
+    parser.add_argument('--vote',
+                        action="store_true",
+                        help="For noisy / bad dump")
     parser.add_argument('dir', default=None, help='.jed dir')
     parser.add_argument('fn', default=None, help='.jed dir')
     args = parser.parse_args()
 
-    run(args.dir, args.fn, part=args.part)
+    run(args.dir, args.fn, part=args.part, vote=args.vote)

@@ -324,11 +324,13 @@ def run(jed_fn_in,
     v_fn_out = tmp_dir + "/sim_top.v"
     view_fn = tmp_dir + "/dut.view"
     view_j_fn = tmp_dir + "/dut_view.json"
+    metadata_out_fn = tmp_dir + "/meta.json"
 
     cd = "cd %s &&" % (tmp_dir, )
 
     print("Converting to verilog")
     pal = pal16xx_jed_to_verilog.run(jed_fn_in=jed_fn_in,
+                                     metadata_out_fn=metadata_out_fn,
                                      v_fn_out=v_fn_out,
                                      view_fn=view_fn,
                                      view_j_fn=view_j_fn)

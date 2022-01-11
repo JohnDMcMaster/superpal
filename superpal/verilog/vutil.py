@@ -311,7 +311,7 @@ class PAL:
                        v_fn_out,
                        view_fn=None,
                        view_j_fn=None,
-                       metadata_fn=None):
+                       metadata_out_fn=None):
         print("Converting to view (%s)" % (self.part(), ))
         raw = subprocess.check_output("jedutil -view %s %s" %
                                       (jed_fn_in, self.part()),
@@ -339,8 +339,8 @@ class PAL:
             "npins_dut_in": self.get_npins_in(),
             "npins_dut_out": self.get_npins_out(),
         }
-        if metadata_fn:
-            open(metadata_fn, "w").write(
+        if metadata_out_fn:
+            open(metadata_out_fn, "w").write(
                 json.dumps(self.metadata,
                            sort_keys=True,
                            indent=4,
